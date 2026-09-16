@@ -12,30 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { Button } from '@mui/material';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import { Messages } from './configure-more.messages';
+import { CardPickerMessages } from './card-picker.types';
 
-export const ConfigureMore = ({
-  onClick,
-  disabled,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-}) => {
-  return (
-    <Button type="button" onClick={onClick} disabled={disabled}>
-      {Messages.configMore}
-      <EditOutlinedIcon
-        sx={{
-          verticalAlign: 'text-bottom',
-          pl: 1,
-        }}
-        fontSize="medium"
-        data-testid={`config-more-button`}
-      />
-    </Button>
-  );
+// Generic defaults; consumers override the relevant strings via the `messages` prop.
+export const Messages: CardPickerMessages = {
+  searchPlaceholder: 'Search…',
+  searchAriaLabel: 'Search options',
+  browseAll: (count) => `Browse all ${count}`,
+  dialogTitle: 'Choose an option',
+  noMatches: (query) => `No matches for “${query}”.`,
 };
-
-export default ConfigureMore;

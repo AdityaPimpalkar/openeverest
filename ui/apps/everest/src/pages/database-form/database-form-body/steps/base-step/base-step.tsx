@@ -22,11 +22,15 @@ import { StepProps } from '../../../database-form.types.js';
 import { DbWizardFormFields } from 'consts.ts';
 import { useDatabasePageMode } from '../../../hooks/use-database-page-mode.js';
 import { StepHeader } from '../../steps-old/step-header/step-header.js';
-import { Messages } from '../../steps-old/first/first-step.messages.js';
+import { Messages } from './base-step.messages.js';
 import { useNamespacePermissionsForResource } from 'hooks/rbac';
 import { useNamespaces } from 'hooks/index.ts';
 import { FormMode } from 'components/ui-generator/ui-generator.types.js';
 import { useDatabaseFormContext } from 'pages/database-form/database-form-context';
+import {
+  PresetSelectCards,
+  usePresetSelectionContext,
+} from 'pages/database-form/preset-selection';
 
 export const BaseInfoStep = ({ loadingDefaultsForEdition }: StepProps) => {
   const mode = useDatabasePageMode();
@@ -35,6 +39,7 @@ export const BaseInfoStep = ({ loadingDefaultsForEdition }: StepProps) => {
     refetchInterval: 10 * 1000,
   });
   const { topologies, hasMultipleTopologies } = useDatabaseFormContext();
+  const { presetSelected } = usePresetSelectionContext();
   const { watch, setValue, getFieldState } = useFormContext();
 
   // const dbType: DbType = watch(DbWizardFormFields.dbType);
@@ -140,6 +145,7 @@ export const BaseInfoStep = ({ loadingDefaultsForEdition }: StepProps) => {
         pageTitle={Messages.pageTitle}
         pageDescription={Messages.pageDescription}
       />
+      {mode === FormMode.New && <PresetSelectCards />}
       <FormGroup sx={{ mt: 3 }}>
         <AutoCompleteInput
           labelProps={{
@@ -167,9 +173,12 @@ export const BaseInfoStep = ({ loadingDefaultsForEdition }: StepProps) => {
         {hasMultipleTopologies && (
           <SelectInput
             name={DbWizardFormFields.topology}
-            label="Database Topology"
+            label={Messages.labels.topology}
             selectFieldProps={{
-              disabled: mode === FormMode.Restore || loadingDefaultsForEdition,
+              disabled:
+                mode === FormMode.Restore ||
+                loadingDefaultsForEdition ||
+                presetSelected,
             }}
           >
             {topologies.map((topology) => (
