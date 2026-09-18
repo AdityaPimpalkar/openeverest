@@ -2,38 +2,21 @@ name: FE E2E Workflow
 
 on:
   workflow_call:
-    secrets:
-      CI_USER:
-        required: true
-      CI_PASSWORD:
-        required: true
-      RBAC_USER:
-        required: true
-      RBAC_PASSWORD:
-        required: true
 
 permissions:
   contents: read
 
-env:
-  GONOPROXY: "github.com/percona"
-  GONOSUMDB: "github.com/percona"
-  GOPRIVATE: "github.com/percona"
-
 jobs:
   e2e:
-    strategy:
-      fail-fast: true
-    continue-on-error: false
+    timeout-minutes: 60
     runs-on: cncf-ubuntu-16-64-x86
     env:
       PMM_HELM_VER: "1.3.21"
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.ms-playwright
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Set up Go release
@@ -43,16 +26,8 @@ jobs:
           cache: true
 
       # Setup Node
-      - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6.0.5
-        with:
-          version: 9.4.0
-
-      - name: Use Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 20.x
-          cache: "pnpm"
-          cache-dependency-path: ui/pnpm-lock.yaml
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: Install Kubernetes tools
         uses: ./.github/actions/install-kubernetes-tools
@@ -127,10 +102,7 @@ jobs:
           --skip-db-namespace \
           --helm.set server.image.repository=ghcr.io/openeverest/openeverest-dev \
           --helm.set server.apiRequestsRateLimit=200 \
-          --helm.set versionMetadataURL=https://check-dev.percona.com \
-          --helm.set operator.init=false \
-          --helm.set operator.image=ghcr.io/openeverest/openeverest-operator-dev \
-          --helm.set olm.catalogSourceImage=ghcr.io/openeverest/openeverest-catalog-dev
+          --helm.set versionMetadataURL=https://check-dev.percona.com
 
       - name: Add everest namespace
         shell: bash
@@ -168,6 +140,22 @@ jobs:
           make init
           make build
           pnpm --filter "@percona/everest" dev &
+
+      - name: Wait for the UI dev server
+        shell: bash
+        run: |
+          for i in $(seq 1 30); do
+            curl -fs -o /dev/null http://localhost:3000 && exit 0
+            sleep 2
+          done
+          echo "::error::UI dev server is not reachable on http://localhost:3000"
+          exit 1
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('ui/pnpm-lock.yaml') }}
 
       - name: Install Chromium for Playwright
         shell: bash
