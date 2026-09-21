@@ -729,6 +729,24 @@ components:
                         parameters payload.
                       x-kubernetes-preserve-unknown-fields: true
                   type: object
+                supportedRetentionTypes:
+                  description: |-
+                    SupportedRetentionTypes lists the schedule retention modes this class
+                    accepts (count and/or time). Empty means both are allowed. The runtime
+                    rejects Instance schedules whose retention.type is not in this list;
+                    providers declare the subset their engine supports (e.g. PSMDB/PXC:
+                    count; CNPG/Barman: time).
+                  items:
+                    description: |-
+                      ScheduleRetentionType is a retention mode a BackupClass may advertise.
+                      Values match InstanceBackupSchedule.retention.type.
+                    enum:
+                    - count
+                    - time
+                    type: string
+                  maxItems: 2
+                  type: array
+                  x-kubernetes-list-type: set
                 supportsPITR:
                   description: |-
                     SupportsPITR indicates whether this class supports point-in-time recovery.
@@ -1611,18 +1629,55 @@ components:
                                 per-backup-run.
                               type: object
                               x-kubernetes-preserve-unknown-fields: true
-                            retentionCopies:
+                            retention:
                               description: |-
-                                RetentionCopies is the number of recent backups to keep for this
-                                schedule. Zero (or unset) means "keep all". Negative values are
-                                rejected.
-                              format: int32
-                              minimum: 0
-                              type: integer
+                                Retention configures count-based or time-based backup retention for
+                                this schedule. Required on every schedule; use type=count with
+                                count unset or 0 to keep all backups.
+                              properties:
+                                count:
+                                  description: |-
+                                    Count is the number of recent backups to keep when Type is count.
+                                    Zero or unset means keep all. Forbidden when Type is time.
+                                  format: int32
+                                  minimum: 0
+                                  type: integer
+                                duration:
+                                  description: |-
+                                    Duration is the recovery window when Type is time, in the form
+                                    <positive-integer><unit> where unit is d (days), w (weeks), or m
+                                    (months) — e.g. "30d", "4w", "2m". Forbidden when Type is count.
+                                  pattern: ^[1-9][0-9]*[dwm]$
+                                  type: string
+                                type:
+                                  default: count
+                                  description: Type selects count-based or time-based
+                                    retention.
+                                  enum:
+                                  - count
+                                  - time
+                                  type: string
+                              required:
+                              - type
+                              type: object
+                              x-kubernetes-validations:
+                              - message: duration is only allowed when retention type
+                                  is time
+                                rule: 'self.type == ''count'' ? !has(self.duration)
+                                  : true'
+                              - message: count is only allowed when retention type
+                                  is count
+                                rule: 'self.type == ''time'' ? !has(self.count) :
+                                  true'
+                              - message: duration is required when retention type
+                                  is time
+                                rule: 'self.type == ''time'' ? has(self.duration)
+                                  : true'
                           required:
                           - cron
                           - enabled
                           - name
+                          - retention
                           type: object
                         maxItems: 10
                         type: array
@@ -3683,18 +3738,55 @@ components:
                                 per-backup-run.
                               type: object
                               x-kubernetes-preserve-unknown-fields: true
-                            retentionCopies:
+                            retention:
                               description: |-
-                                RetentionCopies is the number of recent backups to keep for this
-                                schedule. Zero (or unset) means "keep all". Negative values are
-                                rejected.
-                              format: int32
-                              minimum: 0
-                              type: integer
+                                Retention configures count-based or time-based backup retention for
+                                this schedule. Required on every schedule; use type=count with
+                                count unset or 0 to keep all backups.
+                              properties:
+                                count:
+                                  description: |-
+                                    Count is the number of recent backups to keep when Type is count.
+                                    Zero or unset means keep all. Forbidden when Type is time.
+                                  format: int32
+                                  minimum: 0
+                                  type: integer
+                                duration:
+                                  description: |-
+                                    Duration is the recovery window when Type is time, in the form
+                                    <positive-integer><unit> where unit is d (days), w (weeks), or m
+                                    (months) — e.g. "30d", "4w", "2m". Forbidden when Type is count.
+                                  pattern: ^[1-9][0-9]*[dwm]$
+                                  type: string
+                                type:
+                                  default: count
+                                  description: Type selects count-based or time-based
+                                    retention.
+                                  enum:
+                                  - count
+                                  - time
+                                  type: string
+                              required:
+                              - type
+                              type: object
+                              x-kubernetes-validations:
+                              - message: duration is only allowed when retention type
+                                  is time
+                                rule: 'self.type == ''count'' ? !has(self.duration)
+                                  : true'
+                              - message: count is only allowed when retention type
+                                  is count
+                                rule: 'self.type == ''time'' ? !has(self.count) :
+                                  true'
+                              - message: duration is required when retention type
+                                  is time
+                                rule: 'self.type == ''time'' ? has(self.duration)
+                                  : true'
                           required:
                           - cron
                           - enabled
                           - name
+                          - retention
                           type: object
                         maxItems: 10
                         type: array

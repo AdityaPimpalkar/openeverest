@@ -157,7 +157,30 @@ type ProviderManagedSpec struct {
 	// Validate(); the UI renders a matching form from it.
 	// +optional
 	PITRParametersSchema *common.ParametersSchema `json:"pitrParametersSchema,omitempty"`
+
+	// SupportedRetentionTypes lists the schedule retention modes this class
+	// accepts (count and/or time). Empty means both are allowed. The runtime
+	// rejects Instance schedules whose retention.type is not in this list;
+	// providers declare the subset their engine supports (e.g. PSMDB/PXC:
+	// count; CNPG/Barman: time).
+	// +optional
+	// +listType=set
+	// +kubebuilder:validation:MaxItems=2
+	SupportedRetentionTypes []ScheduleRetentionType `json:"supportedRetentionTypes,omitempty"`
 }
+
+// ScheduleRetentionType is a retention mode a BackupClass may advertise.
+// Values match InstanceBackupSchedule.retention.type.
+//
+// +kubebuilder:validation:Enum=count;time
+type ScheduleRetentionType string
+
+const (
+	// ScheduleRetentionTypeCount keeps N recent backups.
+	ScheduleRetentionTypeCount ScheduleRetentionType = "count"
+	// ScheduleRetentionTypeTime keeps backups within a recovery window.
+	ScheduleRetentionTypeTime ScheduleRetentionType = "time"
+)
 
 // BackupClassLimits expresses the caps a ProviderManaged BackupClass places
 // on the backup configuration of an Instance that uses it. All fields are

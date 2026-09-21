@@ -1536,12 +1536,30 @@ export interface components {
                              */
                             parameters?: Record<string, never>;
                             /**
-                             * Format: int32
-                             * @description RetentionCopies is the number of recent backups to keep for this
-                             *     schedule. Zero (or unset) means "keep all". Negative values are
-                             *     rejected.
+                             * @description Retention configures count-based or time-based backup retention for
+                             *     this schedule. Required on every schedule; use type=count with
+                             *     count unset or 0 to keep all backups.
                              */
-                            retentionCopies?: number;
+                            retention: {
+                                /**
+                                 * Format: int32
+                                 * @description Count is the number of recent backups to keep when Type is count.
+                                 *     Zero or unset means keep all. Forbidden when Type is time.
+                                 */
+                                count?: number;
+                                /**
+                                 * @description Duration is the recovery window when Type is time, in the form
+                                 *     <positive-integer><unit> where unit is d (days), w (weeks), or m
+                                 *     (months) — e.g. "30d", "4w", "2m". Forbidden when Type is count.
+                                 */
+                                duration?: string;
+                                /**
+                                 * @description Type selects count-based or time-based retention.
+                                 * @default count
+                                 * @enum {string}
+                                 */
+                                type: "count" | "time";
+                            };
                         }[];
                         /**
                          * @description StorageRef references a BackupStorage in the same namespace. The
@@ -3029,12 +3047,30 @@ export interface components {
                              */
                             parameters?: Record<string, never>;
                             /**
-                             * Format: int32
-                             * @description RetentionCopies is the number of recent backups to keep for this
-                             *     schedule. Zero (or unset) means "keep all". Negative values are
-                             *     rejected.
+                             * @description Retention configures count-based or time-based backup retention for
+                             *     this schedule. Required on every schedule; use type=count with
+                             *     count unset or 0 to keep all backups.
                              */
-                            retentionCopies?: number;
+                            retention: {
+                                /**
+                                 * Format: int32
+                                 * @description Count is the number of recent backups to keep when Type is count.
+                                 *     Zero or unset means keep all. Forbidden when Type is time.
+                                 */
+                                count?: number;
+                                /**
+                                 * @description Duration is the recovery window when Type is time, in the form
+                                 *     <positive-integer><unit> where unit is d (days), w (weeks), or m
+                                 *     (months) — e.g. "30d", "4w", "2m". Forbidden when Type is count.
+                                 */
+                                duration?: string;
+                                /**
+                                 * @description Type selects count-based or time-based retention.
+                                 * @default count
+                                 * @enum {string}
+                                 */
+                                type: "count" | "time";
+                            };
                         }[];
                         /**
                          * @description StorageRef references a BackupStorage in the same namespace. The
@@ -5006,6 +5042,14 @@ export interface components {
                          */
                         openAPIV3Schema?: unknown;
                     };
+                    /**
+                     * @description SupportedRetentionTypes lists the schedule retention modes this class
+                     *     accepts (count and/or time). Empty means both are allowed. The runtime
+                     *     rejects Instance schedules whose retention.type is not in this list;
+                     *     providers declare the subset their engine supports (e.g. PSMDB/PXC:
+                     *     count; CNPG/Barman: time).
+                     */
+                    supportedRetentionTypes?: ("count" | "time")[];
                     /**
                      * @description SupportsPITR indicates whether this class supports point-in-time recovery.
                      *     Used by Restore validation when Restore.spec.dataSource.pitr is set.

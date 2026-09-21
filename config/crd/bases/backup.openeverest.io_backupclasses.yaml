@@ -428,6 +428,24 @@ spec:
                           parameters payload.
                         x-kubernetes-preserve-unknown-fields: true
                     type: object
+                  supportedRetentionTypes:
+                    description: |-
+                      SupportedRetentionTypes lists the schedule retention modes this class
+                      accepts (count and/or time). Empty means both are allowed. The runtime
+                      rejects Instance schedules whose retention.type is not in this list;
+                      providers declare the subset their engine supports (e.g. PSMDB/PXC:
+                      count; CNPG/Barman: time).
+                    items:
+                      description: |-
+                        ScheduleRetentionType is a retention mode a BackupClass may advertise.
+                        Values match InstanceBackupSchedule.retention.type.
+                      enum:
+                      - count
+                      - time
+                      type: string
+                    maxItems: 2
+                    type: array
+                    x-kubernetes-list-type: set
                   supportsPITR:
                     description: |-
                       SupportsPITR indicates whether this class supports point-in-time recovery.
