@@ -400,6 +400,12 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req reconcile.Reques
 		if errors.Is(err, controller.ErrPITRConfigInvalid) {
 			reason = controller.PITRConfigInvalidReason
 		}
+		if errors.Is(err, controller.ErrRetentionInvalid) {
+			reason = controller.RetentionInvalidReason
+		}
+		if errors.Is(err, controller.ErrRetentionUnsupported) {
+			reason = controller.RetentionUnsupportedReason
+		}
 		setCondition(in, v1alpha1.ConditionBackupConfigured, metav1.ConditionFalse,
 			reason, err.Error(), metav1.Now())
 		if updateErr := r.Client.Status().Update(ctx, in); updateErr != nil {
@@ -955,16 +961,20 @@ func fetchBackupClassForInstance(ctx context.Context, c client.Client, in *v1alp
 // validateInstanceBackupConfig enforces the generic backup configuration
 // rules declared on a ProviderManaged BackupClass against an Instance's
 // .spec.backup: the numeric limits (maxStorages, maxPITREnabledStorages,
-// maxSchedulesPerStorage) and the per-storage PITR config schema. It is a
-// no-op when no class is referenced or when the class is Job-mode. Returns
-// the sentinels controller.ErrBackupClassLimitsExceeded and
-// controller.ErrPITRConfigInvalid that providers see via the helpers.
+// maxSchedulesPerStorage), schedule retention, and the per-storage PITR
+// config schema. It is a no-op when no class is referenced or when the class
+// is Job-mode (retention shape is still checked). Returns the sentinels
+// controller.ErrBackupClassLimitsExceeded, controller.ErrRetentionInvalid,
+// controller.ErrRetentionUnsupported, and controller.ErrPITRConfigInvalid.
 func validateInstanceBackupConfig(ctx context.Context, c client.Client, in *v1alpha1.Instance) error {
 	bc, err := fetchBackupClassForInstance(ctx, c, in)
 	if err != nil {
 		return err
 	}
 	if err := controller.ValidateInstanceBackupAgainstClass(in, bc); err != nil {
+		return err
+	}
+	if err := controller.ValidateInstanceBackupRetention(in, bc); err != nil {
 		return err
 	}
 	return controller.ValidateInstanceBackupPITRParameters(in, bc)

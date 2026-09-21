@@ -281,6 +281,161 @@ func TestValidateInstanceBackupPITRParameters(t *testing.T) {
 	}
 }
 
+func mkRetentionClass(types ...backupv1alpha1.ScheduleRetentionType) *backupv1alpha1.BackupClass {
+	return &backupv1alpha1.BackupClass{
+		ObjectMeta: metav1.ObjectMeta{Name: "bc"},
+		Spec: backupv1alpha1.BackupClassSpec{
+			ExecutionMode: backupv1alpha1.BackupExecutionModeProviderManaged,
+			ProviderManaged: &backupv1alpha1.ProviderManagedSpec{
+				SupportedRetentionTypes: types,
+			},
+		},
+	}
+}
+
+func withScheduleRetention(
+	st corev1alpha1.InstanceBackupStorage,
+	retention *corev1alpha1.BackupScheduleRetention,
+) corev1alpha1.InstanceBackupStorage {
+	if len(st.Schedules) == 0 {
+		st.Schedules = []corev1alpha1.InstanceBackupSchedule{{
+			Name:    st.StorageRef.Name + "-sched",
+			Enabled: true,
+			Cron:    "0 * * * *",
+		}}
+	}
+	st.Schedules[0].Retention = retention
+	return st
+}
+
+func TestValidateInstanceBackupRetention(t *testing.T) {
+	t.Parallel()
+
+	count7 := int32(7)
+
+	tests := []struct {
+		name    string
+		in      *corev1alpha1.Instance
+		bc      *backupv1alpha1.BackupClass
+		wantErr error
+	}{
+		{
+			name:    "nil inputs are no-ops",
+			in:      nil,
+			bc:      nil,
+			wantErr: nil,
+		},
+		{
+			name: "empty supportedRetentionTypes allows count and time",
+			in: mkInstance(withScheduleRetention(mkStorage("a", false, 0), &corev1alpha1.BackupScheduleRetention{
+				Type:     corev1alpha1.BackupScheduleRetentionTypeTime,
+				Duration: "30d",
+			})),
+			bc:      mkRetentionClass(),
+			wantErr: nil,
+		},
+		{
+			name: "count-only class accepts count retention",
+			in: mkInstance(withScheduleRetention(mkStorage("a", false, 0), &corev1alpha1.BackupScheduleRetention{
+				Type:  corev1alpha1.BackupScheduleRetentionTypeCount,
+				Count: &count7,
+			})),
+			bc:      mkRetentionClass(backupv1alpha1.ScheduleRetentionTypeCount),
+			wantErr: nil,
+		},
+		{
+			name: "count-only class rejects time retention",
+			in: mkInstance(withScheduleRetention(mkStorage("a", false, 0), &corev1alpha1.BackupScheduleRetention{
+				Type:     corev1alpha1.BackupScheduleRetentionTypeTime,
+				Duration: "30d",
+			})),
+			bc:      mkRetentionClass(backupv1alpha1.ScheduleRetentionTypeCount),
+			wantErr: ErrRetentionUnsupported,
+		},
+		{
+			name: "time-only class rejects count retention",
+			in: mkInstance(withScheduleRetention(mkStorage("a", false, 0), &corev1alpha1.BackupScheduleRetention{
+				Type:  corev1alpha1.BackupScheduleRetentionTypeCount,
+				Count: &count7,
+			})),
+			bc:      mkRetentionClass(backupv1alpha1.ScheduleRetentionTypeTime),
+			wantErr: ErrRetentionUnsupported,
+		},
+		{
+			name:    "missing retention is rejected",
+			in:      mkInstance(withScheduleRetention(mkStorage("a", false, 0), nil)),
+			bc:      mkRetentionClass(),
+			wantErr: ErrRetentionInvalid,
+		},
+		{
+			name: "time retention without duration is rejected",
+			in: mkInstance(withScheduleRetention(mkStorage("a", false, 0), &corev1alpha1.BackupScheduleRetention{
+				Type: corev1alpha1.BackupScheduleRetentionTypeTime,
+			})),
+			bc:      mkRetentionClass(),
+			wantErr: ErrRetentionInvalid,
+		},
+		{
+			name: "time retention with count is rejected",
+			in: mkInstance(withScheduleRetention(mkStorage("a", false, 0), &corev1alpha1.BackupScheduleRetention{
+				Type:     corev1alpha1.BackupScheduleRetentionTypeTime,
+				Duration: "30d",
+				Count:    &count7,
+			})),
+			bc:      mkRetentionClass(),
+			wantErr: ErrRetentionInvalid,
+		},
+		{
+			name: "count retention with duration is rejected",
+			in: mkInstance(withScheduleRetention(mkStorage("a", false, 0), &corev1alpha1.BackupScheduleRetention{
+				Type:     corev1alpha1.BackupScheduleRetentionTypeCount,
+				Duration: "30d",
+			})),
+			bc:      mkRetentionClass(),
+			wantErr: ErrRetentionInvalid,
+		},
+		{
+			name: "invalid duration format is rejected",
+			in: mkInstance(withScheduleRetention(mkStorage("a", false, 0), &corev1alpha1.BackupScheduleRetention{
+				Type:     corev1alpha1.BackupScheduleRetentionTypeTime,
+				Duration: "30",
+			})),
+			bc:      mkRetentionClass(),
+			wantErr: ErrRetentionInvalid,
+		},
+		{
+			name: "job-mode class still validates shape",
+			in: mkInstance(withScheduleRetention(mkStorage("a", false, 0), &corev1alpha1.BackupScheduleRetention{
+				Type: corev1alpha1.BackupScheduleRetentionTypeTime,
+			})),
+			bc: &backupv1alpha1.BackupClass{
+				Spec: backupv1alpha1.BackupClassSpec{ExecutionMode: backupv1alpha1.BackupExecutionModeJob},
+			},
+			wantErr: ErrRetentionInvalid,
+		},
+		{
+			name:    "nil class still validates required retention",
+			in:      mkInstance(withScheduleRetention(mkStorage("a", false, 0), nil)),
+			bc:      nil,
+			wantErr: ErrRetentionInvalid,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := ValidateInstanceBackupRetention(tc.in, tc.bc)
+			if tc.wantErr != nil {
+				require.Error(t, err)
+				require.ErrorIs(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestValidateBackupSucceeded(t *testing.T) {
 	t.Parallel()
 
