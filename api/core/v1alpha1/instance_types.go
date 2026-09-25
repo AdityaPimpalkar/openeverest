@@ -279,7 +279,7 @@ type InstanceBackupStorage struct {
 type BackupScheduleRetentionType string
 
 const (
-	// BackupScheduleRetentionTypeCount keeps the N most recent backups
+	// BackupScheduleRetentionTypeCount keeps the N most recent backups.
 	BackupScheduleRetentionTypeCount BackupScheduleRetentionType = "count"
 	// BackupScheduleRetentionTypeTime keeps backups inside a recovery window
 	// expressed as Nd/Nw/Nm.

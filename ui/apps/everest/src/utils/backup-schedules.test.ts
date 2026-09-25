@@ -21,9 +21,7 @@ import {
 
 describe('retentionCopiesFromApi', () => {
   it('maps count retention to copies', () => {
-    expect(
-      retentionCopiesFromApi({ type: 'count', count: 7 })
-    ).toBe(7);
+    expect(retentionCopiesFromApi({ type: 'count', count: 7 })).toBe(7);
   });
 
   it('treats unset and time retention as keep-all', () => {
