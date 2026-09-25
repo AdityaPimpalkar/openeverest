@@ -17,7 +17,6 @@ package controller
 import (
 	"errors"
 	"fmt"
-	"regexp"
 
 	backupv1alpha1 "github.com/openeverest/openeverest/v2/api/backup/v1alpha1"
 	apicommon "github.com/openeverest/openeverest/v2/api/common/v1alpha1"
@@ -34,16 +33,6 @@ const LimitsExceededReason = "LimitsExceeded"
 // Instance does not conform to the schema declared by its BackupClass.
 const PITRConfigInvalidReason = "PITRConfigInvalid"
 
-// RetentionInvalidReason is the reason string used on BackupConfigError and
-// the BackupConfigured condition when a schedule's retention is missing or
-// malformed.
-const RetentionInvalidReason = "RetentionInvalid"
-
-// RetentionUnsupportedReason is the reason string used on BackupConfigError and
-// the BackupConfigured condition when a schedule's retention type is not in
-// the BackupClass's supportedRetentionTypes.
-const RetentionUnsupportedReason = "RetentionUnsupported"
-
 // ErrBackupClassLimitsExceeded is the sentinel returned by
 // ValidateInstanceBackupAgainstClass when an Instance violates the limits
 // declared by its BackupClass.
@@ -53,16 +42,6 @@ var ErrBackupClassLimitsExceeded = errors.New("backup class limits exceeded")
 // ValidateInstanceBackupPITRParameters when per-storage PITR parameters do not
 // conform to the BackupClass's providerManaged.pitrParametersSchema.
 var ErrPITRConfigInvalid = errors.New("PITR config invalid")
-
-// ErrRetentionInvalid is the sentinel returned by
-// ValidateInstanceBackupRetention when a schedule is missing retention or the
-// retention payload is malformed (defense in depth for CRD CEL).
-var ErrRetentionInvalid = errors.New("retention invalid")
-
-// ErrRetentionUnsupported is the sentinel returned by
-// ValidateInstanceBackupRetention when a schedule uses a retention type the
-// BackupClass does not advertise in supportedRetentionTypes.
-var ErrRetentionUnsupported = errors.New("retention unsupported")
 
 // ErrInvalidReference is the umbrella sentinel every reference-validation
 // error below satisfies via errors.Is. Callers (e.g. the API server's
@@ -180,93 +159,6 @@ func ValidateInstanceBackupAgainstClass(in *corev1alpha1.Instance, bc *backupv1a
 		}
 	}
 
-	return nil
-}
-
-// ValidateInstanceBackupRetention checks each schedule's retention on the
-// Instance:
-//   - retention is required
-//   - type/count/duration shape matches the CRD rules (defense in depth)
-//   - when the BackupClass declares supportedRetentionTypes, the schedule's
-//     retention.type must appear in that list
-//
-// Empty supportedRetentionTypes means both count and time are allowed. A nil
-// or Job-mode BackupClass skips the capability check but still validates
-// shape. Safe to call with nil inputs.
-func ValidateInstanceBackupRetention(in *corev1alpha1.Instance, bc *backupv1alpha1.BackupClass) error {
-	if in == nil || in.Spec.Backup == nil || !in.Spec.Backup.Enabled {
-		return nil
-	}
-
-	var allowed map[backupv1alpha1.ScheduleRetentionType]struct{}
-	if bc != nil &&
-		bc.Spec.ExecutionMode == backupv1alpha1.BackupExecutionModeProviderManaged &&
-		bc.Spec.ProviderManaged != nil &&
-		len(bc.Spec.ProviderManaged.SupportedRetentionTypes) > 0 {
-		allowed = make(map[backupv1alpha1.ScheduleRetentionType]struct{}, len(bc.Spec.ProviderManaged.SupportedRetentionTypes))
-		for _, t := range bc.Spec.ProviderManaged.SupportedRetentionTypes {
-			allowed[t] = struct{}{}
-		}
-	}
-
-	for _, st := range in.Spec.Backup.Storages {
-		for _, sch := range st.Schedules {
-			if sch.Retention == nil {
-				return fmt.Errorf(
-					"%w: storage %q schedule %q: retention is required",
-					ErrRetentionInvalid, st.StorageRef.Name, sch.Name,
-				)
-			}
-			if err := validateBackupScheduleRetention(sch.Retention); err != nil {
-				return fmt.Errorf(
-					"%w: storage %q schedule %q: %s",
-					ErrRetentionInvalid, st.StorageRef.Name, sch.Name, err.Error(),
-				)
-			}
-			if allowed == nil {
-				continue
-			}
-			typ := sch.Retention.Type
-			if typ == "" {
-				typ = corev1alpha1.BackupScheduleRetentionTypeCount
-			}
-			if _, ok := allowed[backupv1alpha1.ScheduleRetentionType(typ)]; !ok {
-				return fmt.Errorf(
-					"%w: storage %q schedule %q uses retention type %q, BackupClass %q allows %v",
-					ErrRetentionUnsupported, st.StorageRef.Name, sch.Name, typ, bc.Name,
-					bc.Spec.ProviderManaged.SupportedRetentionTypes,
-				)
-			}
-		}
-	}
-	return nil
-}
-
-var retentionDurationPattern = regexp.MustCompile(`^[1-9][0-9]*[dwm]$`)
-
-func validateBackupScheduleRetention(r *corev1alpha1.BackupScheduleRetention) error {
-	typ := r.Type
-	if typ == "" {
-		typ = corev1alpha1.BackupScheduleRetentionTypeCount
-	}
-	switch typ {
-	case corev1alpha1.BackupScheduleRetentionTypeCount:
-		if r.Duration != "" {
-			return fmt.Errorf("duration is only allowed when retention type is time")
-		}
-	case corev1alpha1.BackupScheduleRetentionTypeTime:
-		if r.Count != nil {
-			return fmt.Errorf("count is only allowed when retention type is count")
-		}
-		if r.Duration == "" {
-			return fmt.Errorf("duration is required when retention type is time")
-		}
-		if !retentionDurationPattern.MatchString(r.Duration) {
-			return fmt.Errorf("duration %q must match Nd/Nw/Nm (e.g. 30d, 4w, 2m)", r.Duration)
-		}
-	default:
-		return fmt.Errorf("unknown retention type %q", r.Type)
-	}
 	return nil
 }
 

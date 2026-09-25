@@ -288,9 +288,12 @@ const (
 
 // BackupScheduleRetention configures how backups produced by a schedule are
 // retained. Type selects which field is meaningful:
-//   - count: keep Count recent backups (0 or unset = keep all)
+//   - count: keep Count recent backups (Count >= 1)
 //   - time:  keep backups within Duration (e.g. "30d", "4w", "2m")
 //
+// Omit Retention on the schedule to keep all backups.
+//
+// +kubebuilder:validation:XValidation:rule="self.type == 'count' ? has(self.count) : true",message="count is required when retention type is count"
 // +kubebuilder:validation:XValidation:rule="self.type == 'count' ? !has(self.duration) : true",message="duration is only allowed when retention type is time"
 // +kubebuilder:validation:XValidation:rule="self.type == 'time' ? !has(self.count) : true",message="count is only allowed when retention type is count"
 // +kubebuilder:validation:XValidation:rule="self.type == 'time' ? has(self.duration) : true",message="duration is required when retention type is time"
@@ -300,9 +303,10 @@ type BackupScheduleRetention struct {
 	// +kubebuilder:default=count
 	Type BackupScheduleRetentionType `json:"type"`
 	// Count is the number of recent backups to keep when Type is count.
-	// Zero or unset means keep all. Forbidden when Type is time.
+	// Required when Type is count (minimum 1). Forbidden when Type is time.
+	// Omit Retention on the schedule to keep all backups.
 	// +optional
-	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Minimum=1
 	Count *int32 `json:"count,omitempty"`
 	// Duration is the recovery window when Type is time, in the form
 	// <positive-integer><unit> where unit is d (days), w (weeks), or m
@@ -336,10 +340,9 @@ type InstanceBackupSchedule struct {
 	// +kubebuilder:validation:MinLength=1
 	Cron string `json:"cron"`
 	// Retention configures count-based or time-based backup retention for
-	// this schedule. Required on every schedule; use type=count with
-	// count unset or 0 to keep all backups.
-	// +kubebuilder:validation:Required
-	Retention *BackupScheduleRetention `json:"retention"`
+	// this schedule. Unset keeps all backups.
+	// +optional
+	Retention *BackupScheduleRetention `json:"retention,omitempty"`
 	// Parameters is schedule-specific structured configuration validated
 	// against the BackupClass's .spec.parametersSchema. When unset the
 	// provider falls back to engine defaults. The schema is the same as for

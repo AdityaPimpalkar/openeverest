@@ -135,24 +135,6 @@ func (e BackupClassSpecExecutionMode) Valid() bool {
 	}
 }
 
-// Defines values for BackupClassSpecProviderManagedSupportedRetentionTypes.
-const (
-	BackupClassSpecProviderManagedSupportedRetentionTypesCount BackupClassSpecProviderManagedSupportedRetentionTypes = "count"
-	BackupClassSpecProviderManagedSupportedRetentionTypesTime  BackupClassSpecProviderManagedSupportedRetentionTypes = "time"
-)
-
-// Valid indicates whether the value is a known member of the BackupClassSpecProviderManagedSupportedRetentionTypes enum.
-func (e BackupClassSpecProviderManagedSupportedRetentionTypes) Valid() bool {
-	switch e {
-	case BackupClassSpecProviderManagedSupportedRetentionTypesCount:
-		return true
-	case BackupClassSpecProviderManagedSupportedRetentionTypesTime:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for BackupClassStatusConditionsStatus.
 const (
 	BackupClassStatusConditionsStatusFalse   BackupClassStatusConditionsStatus = "False"
@@ -1200,13 +1182,6 @@ type BackupClass struct {
 				OpenAPIV3Schema interface{} `json:"openAPIV3Schema,omitempty"`
 			} `json:"pitrParametersSchema,omitempty"`
 
-			// SupportedRetentionTypes SupportedRetentionTypes lists the schedule retention modes this class
-			// accepts (count and/or time). Empty means both are allowed. The runtime
-			// rejects Instance schedules whose retention.type is not in this list;
-			// providers declare the subset their engine supports (e.g. PSMDB/PXC:
-			// count; CNPG/Barman: time).
-			SupportedRetentionTypes *[]BackupClassSpecProviderManagedSupportedRetentionTypes `json:"supportedRetentionTypes,omitempty"`
-
 			// SupportsPITR SupportsPITR indicates whether this class supports point-in-time recovery.
 			// Used by Restore validation when Restore.spec.dataSource.pitr is set.
 			SupportsPITR *bool `json:"supportsPITR,omitempty"`
@@ -1268,10 +1243,6 @@ type BackupClass struct {
 
 // BackupClassSpecExecutionMode ExecutionMode selects between job-based and provider-managed execution.
 type BackupClassSpecExecutionMode string
-
-// BackupClassSpecProviderManagedSupportedRetentionTypes ScheduleRetentionType is a retention mode a BackupClass may advertise.
-// Values match InstanceBackupSchedule.retention.type.
-type BackupClassSpecProviderManagedSupportedRetentionTypes string
 
 // BackupClassStatusConditionsStatus status of the condition, one of True, False, Unknown.
 type BackupClassStatusConditionsStatus string
@@ -1747,11 +1718,11 @@ type Instance struct {
 					Parameters *map[string]interface{} `json:"parameters,omitempty"`
 
 					// Retention Retention configures count-based or time-based backup retention for
-					// this schedule. Required on every schedule; use type=count with
-					// count unset or 0 to keep all backups.
-					Retention struct {
+					// this schedule. Unset keeps all backups.
+					Retention *struct {
 						// Count Count is the number of recent backups to keep when Type is count.
-						// Zero or unset means keep all. Forbidden when Type is time.
+						// Required when Type is count (minimum 1). Forbidden when Type is time.
+						// Omit Retention on the schedule to keep all backups.
 						Count *int32 `json:"count,omitempty"`
 
 						// Duration Duration is the recovery window when Type is time, in the form
@@ -1761,7 +1732,7 @@ type Instance struct {
 
 						// Type Type selects count-based or time-based retention.
 						Type InstanceSpecBackupStoragesSchedulesRetentionType `json:"type"`
-					} `json:"retention"`
+					} `json:"retention,omitempty"`
 				} `json:"schedules,omitempty"`
 
 				// StorageRef StorageRef references a BackupStorage in the same namespace. The
@@ -3032,11 +3003,11 @@ type InstancePreset struct {
 					Parameters *map[string]interface{} `json:"parameters,omitempty"`
 
 					// Retention Retention configures count-based or time-based backup retention for
-					// this schedule. Required on every schedule; use type=count with
-					// count unset or 0 to keep all backups.
-					Retention struct {
+					// this schedule. Unset keeps all backups.
+					Retention *struct {
 						// Count Count is the number of recent backups to keep when Type is count.
-						// Zero or unset means keep all. Forbidden when Type is time.
+						// Required when Type is count (minimum 1). Forbidden when Type is time.
+						// Omit Retention on the schedule to keep all backups.
 						Count *int32 `json:"count,omitempty"`
 
 						// Duration Duration is the recovery window when Type is time, in the form
@@ -3046,7 +3017,7 @@ type InstancePreset struct {
 
 						// Type Type selects count-based or time-based retention.
 						Type InstancePresetSpecBackupStoragesSchedulesRetentionType `json:"type"`
-					} `json:"retention"`
+					} `json:"retention,omitempty"`
 				} `json:"schedules,omitempty"`
 
 				// StorageRef StorageRef references a BackupStorage in the same namespace. The

@@ -175,15 +175,15 @@ spec:
                               retention:
                                 description: |-
                                   Retention configures count-based or time-based backup retention for
-                                  this schedule. Required on every schedule; use type=count with
-                                  count unset or 0 to keep all backups.
+                                  this schedule. Unset keeps all backups.
                                 properties:
                                   count:
                                     description: |-
                                       Count is the number of recent backups to keep when Type is count.
-                                      Zero or unset means keep all. Forbidden when Type is time.
+                                      Required when Type is count (minimum 1). Forbidden when Type is time.
+                                      Omit Retention on the schedule to keep all backups.
                                     format: int32
-                                    minimum: 0
+                                    minimum: 1
                                     type: integer
                                   duration:
                                     description: |-
@@ -204,6 +204,10 @@ spec:
                                 - type
                                 type: object
                                 x-kubernetes-validations:
+                                - message: count is required when retention type is
+                                    count
+                                  rule: 'self.type == ''count'' ? has(self.count)
+                                    : true'
                                 - message: duration is only allowed when retention
                                     type is time
                                   rule: 'self.type == ''count'' ? !has(self.duration)
@@ -220,7 +224,6 @@ spec:
                             - cron
                             - enabled
                             - name
-                            - retention
                             type: object
                           maxItems: 10
                           type: array

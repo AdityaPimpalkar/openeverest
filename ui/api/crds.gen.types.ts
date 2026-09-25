@@ -473,14 +473,6 @@ export interface components {
                         openAPIV3Schema?: unknown;
                     };
                     /**
-                     * @description SupportedRetentionTypes lists the schedule retention modes this class
-                     *     accepts (count and/or time). Empty means both are allowed. The runtime
-                     *     rejects Instance schedules whose retention.type is not in this list;
-                     *     providers declare the subset their engine supports (e.g. PSMDB/PXC:
-                     *     count; CNPG/Barman: time).
-                     */
-                    supportedRetentionTypes?: ("count" | "time")[];
-                    /**
                      * @description SupportsPITR indicates whether this class supports point-in-time recovery.
                      *     Used by Restore validation when Restore.spec.dataSource.pitr is set.
                      */
@@ -1048,14 +1040,14 @@ export interface components {
                             parameters?: Record<string, never>;
                             /**
                              * @description Retention configures count-based or time-based backup retention for
-                             *     this schedule. Required on every schedule; use type=count with
-                             *     count unset or 0 to keep all backups.
+                             *     this schedule. Unset keeps all backups.
                              */
-                            retention: {
+                            retention?: {
                                 /**
                                  * Format: int32
                                  * @description Count is the number of recent backups to keep when Type is count.
-                                 *     Zero or unset means keep all. Forbidden when Type is time.
+                                 *     Required when Type is count (minimum 1). Forbidden when Type is time.
+                                 *     Omit Retention on the schedule to keep all backups.
                                  */
                                 count?: number;
                                 /**
@@ -2461,14 +2453,14 @@ export interface components {
                             parameters?: Record<string, never>;
                             /**
                              * @description Retention configures count-based or time-based backup retention for
-                             *     this schedule. Required on every schedule; use type=count with
-                             *     count unset or 0 to keep all backups.
+                             *     this schedule. Unset keeps all backups.
                              */
-                            retention: {
+                            retention?: {
                                 /**
                                  * Format: int32
                                  * @description Count is the number of recent backups to keep when Type is count.
-                                 *     Zero or unset means keep all. Forbidden when Type is time.
+                                 *     Required when Type is count (minimum 1). Forbidden when Type is time.
+                                 *     Omit Retention on the schedule to keep all backups.
                                  */
                                 count?: number;
                                 /**
