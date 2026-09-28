@@ -99,7 +99,7 @@ const isFlattenedSchedule = (value: unknown): value is FlattenedSchedule => {
   const cron = Reflect.get(value, 'cron');
   const enabled = Reflect.get(value, 'enabled');
   const storageName = Reflect.get(value, 'storageName');
-  const retention = Reflect.get(value, 'retention');
+  const retentionCopies = Reflect.get(value, 'retentionCopies');
   const parameters = Reflect.get(value, 'parameters');
 
   const hasCoreFields =
@@ -109,7 +109,7 @@ const isFlattenedSchedule = (value: unknown): value is FlattenedSchedule => {
     typeof storageName === 'string';
 
   const hasOptionalFields =
-    (retention === undefined || isRecord(retention)) &&
+    (retentionCopies === undefined || typeof retentionCopies === 'number') &&
     (parameters === undefined || isRecord(parameters));
 
   return hasCoreFields && hasOptionalFields;

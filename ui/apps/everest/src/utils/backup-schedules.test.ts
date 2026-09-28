@@ -13,45 +13,38 @@
 // limitations under the License.
 
 import { Instance } from 'shared-types/api.types';
-import { applySchedulesToStorages } from 'pages/db-cluster-details/backups/backups.utils';
-import { flattenSchedules, scheduleToApi } from './backup-schedules';
+import {
+  flattenSchedules,
+  retentionCopiesFromApi,
+  retentionToApi,
+} from './backup-schedules';
 
-describe('scheduleToApi', () => {
-  it('passes retention through unchanged', () => {
-    expect(
-      scheduleToApi({
-        name: 'daily',
-        cron: '0 2 * * *',
-        enabled: true,
-        storageName: 's3',
-        retention: { type: 'time', duration: '30d' },
-      })
-    ).toEqual({
-      name: 'daily',
-      cron: '0 2 * * *',
-      enabled: true,
-      retention: { type: 'time', duration: '30d' },
-    });
+describe('retentionCopiesFromApi', () => {
+  it('maps count retention to copies', () => {
+    expect(retentionCopiesFromApi({ type: 'count', count: 7 })).toBe(7);
   });
 
-  it('omits unset retention', () => {
+  it('treats unset and time retention as keep-all', () => {
+    expect(retentionCopiesFromApi(undefined)).toBeUndefined();
     expect(
-      scheduleToApi({
-        name: 'daily',
-        cron: '0 2 * * *',
-        enabled: true,
-        storageName: 's3',
-      })
-    ).toEqual({
-      name: 'daily',
-      cron: '0 2 * * *',
-      enabled: true,
-    });
+      retentionCopiesFromApi({ type: 'time', duration: '30d' })
+    ).toBeUndefined();
+  });
+});
+
+describe('retentionToApi', () => {
+  it('maps positive copies to count retention', () => {
+    expect(retentionToApi(3)).toEqual({ type: 'count', count: 3 });
+  });
+
+  it('omits retention for keep-all (0 / unset)', () => {
+    expect(retentionToApi(0)).toBeUndefined();
+    expect(retentionToApi(undefined)).toBeUndefined();
   });
 });
 
 describe('flattenSchedules', () => {
-  it('passes nested retention through onto FlattenedSchedule', () => {
+  it('projects nested retention onto retentionCopies', () => {
     const instance = {
       spec: {
         backup: {
@@ -77,44 +70,9 @@ describe('flattenSchedules', () => {
         name: 'daily',
         cron: '0 2 * * *',
         enabled: true,
-        retention: { type: 'count', count: 2 },
+        retentionCopies: 2,
+        parameters: undefined,
         storageName: 's3',
-      },
-    ]);
-  });
-});
-
-describe('applySchedulesToStorages', () => {
-  it('round-trips a time retention schedule unchanged', () => {
-    const instance = {
-      spec: {
-        backup: {
-          storages: [
-            {
-              storageRef: { name: 's3' },
-              schedules: [
-                {
-                  name: 'daily',
-                  cron: '0 2 * * *',
-                  enabled: true,
-                  retention: { type: 'time', duration: '30d' },
-                },
-              ],
-            },
-          ],
-        },
-      },
-    } as unknown as Instance;
-
-    const schedules = flattenSchedules(instance);
-    const storages = applySchedulesToStorages(instance, schedules);
-
-    expect(storages[0].schedules).toEqual([
-      {
-        name: 'daily',
-        cron: '0 2 * * *',
-        enabled: true,
-        retention: { type: 'time', duration: '30d' },
       },
     ]);
   });

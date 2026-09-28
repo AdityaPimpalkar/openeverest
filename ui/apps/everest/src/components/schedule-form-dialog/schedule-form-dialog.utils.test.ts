@@ -28,7 +28,7 @@ const makeSchedule = (
   enabled: true,
   cron: '0 0 * * *',
   storageName: 'storage-a',
-  retention: { type: 'count', count: 3 },
+  retentionCopies: 3,
   ...overrides,
 });
 
@@ -227,7 +227,7 @@ describe('scheduleModalDefaultValues', () => {
       name: 'my-schedule',
       storageName: 'my-storage',
       cron: '0 12 * * *',
-      retention: { type: 'count', count: 5 },
+      retentionCopies: 5,
       parameters: { compressionType: 'gzip' },
     });
 
@@ -255,16 +255,6 @@ describe('scheduleModalDefaultValues', () => {
         selectedSchedule
       );
       expect(result[ScheduleFormFields.retentionCopies]).toBe('5');
-    });
-
-    it('defaults retention copies to 0 for time retention', () => {
-      const result = scheduleModalDefaultValues(
-        WizardMode.Edit,
-        makeSchedule({
-          retention: { type: 'time', duration: '30d' },
-        })
-      );
-      expect(result[ScheduleFormFields.retentionCopies]).toBe('0');
     });
 
     it('includes parameters when present', () => {

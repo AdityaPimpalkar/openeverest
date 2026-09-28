@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import type { ScheduleRetention } from 'shared-types/backups.types';
-
 // Wizard PITR form state: per-storage PITR config keyed by storage name. This
 // is the flat working shape of the form (like backup.schedules), not the nested
 // Instance spec — buildBackupSpecFromWizard maps each entry onto the matching
@@ -37,7 +35,11 @@ export interface WizardBackupSpec {
       name: string;
       cron: string;
       enabled: boolean;
-      retention?: ScheduleRetention;
+      retention?: {
+        type: 'count' | 'time';
+        count?: number;
+        duration?: string;
+      };
       parameters?: Record<string, unknown>;
     }>;
     pitr?: { enabled: boolean; parameters?: Record<string, unknown> };
