@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import { FlattenedSchedule } from 'components/schedule-form-dialog/schedule-form-dialog-context/schedule-form-dialog-context.types';
-import { flattenSchedules, retentionToApi } from 'utils/backup-schedules';
+import { flattenSchedules, scheduleToApi } from 'utils/backup-schedules';
 import { Instance } from 'shared-types/api.types';
 import { WizardBackupSpec, WizardPitrMap } from './backup-step.types';
 
@@ -51,16 +51,7 @@ export const buildBackupSpecFromWizard = (
       return {
         name: storageName,
         storageRef: { name: storageName },
-        schedules: schedules.map((schedule) => {
-          const retention = retentionToApi(schedule.retentionCopies);
-          return {
-            name: schedule.name,
-            cron: schedule.cron,
-            enabled: schedule.enabled,
-            ...(retention ? { retention } : {}),
-            ...(schedule.parameters ? { parameters: schedule.parameters } : {}),
-          };
-        }),
+        schedules: schedules.map(scheduleToApi),
         ...(pitr?.enabled
           ? {
               pitr: {

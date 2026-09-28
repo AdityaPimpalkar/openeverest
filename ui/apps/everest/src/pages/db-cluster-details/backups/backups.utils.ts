@@ -15,7 +15,7 @@
 import { FlattenedSchedule } from 'components/schedule-form-dialog/schedule-form-dialog-context/schedule-form-dialog-context.types';
 import { Instance } from 'shared-types/api.types';
 import { Backup } from 'shared-types/backups.types';
-import { retentionToApi } from 'utils/backup-schedules';
+import { scheduleToApi } from 'utils/backup-schedules';
 
 export const applySchedulesToStorages = (
   instance: Instance,
@@ -28,18 +28,7 @@ export const applySchedulesToStorages = (
     ...storage,
     schedules: schedules
       .filter((s) => s.storageName === (storage.storageRef.name ?? ''))
-      .map((schedule) => {
-        const retention = retentionToApi(schedule.retentionCopies);
-        return {
-          name: schedule.name,
-          cron: schedule.cron,
-          enabled: schedule.enabled,
-          ...(retention ? { retention } : {}),
-          ...(schedule.parameters
-            ? { parameters: schedule.parameters as Record<string, never> }
-            : {}),
-        };
-      }),
+      .map(scheduleToApi),
   }));
 };
 
