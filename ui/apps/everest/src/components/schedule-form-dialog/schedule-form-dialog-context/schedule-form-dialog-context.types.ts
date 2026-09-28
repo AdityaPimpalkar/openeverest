@@ -15,23 +15,10 @@
 import { ScheduleFormData } from '../schedule-form/schedule-form-schema';
 import { kebabize } from '@percona/utils';
 import { ScheduleWizardMode, WizardMode } from 'shared-types/wizard.types';
-import { BackupClass } from 'shared-types/backups.types';
-import { Instance } from 'shared-types/api.types';
+import { BackupClass, InstanceSchedule } from 'shared-types/backups.types';
 
-type InstanceSchedule = NonNullable<
-  NonNullable<
-    NonNullable<Instance['spec']['backup']>['storages']
-  >[number]['schedules']
->[number];
-
-export type FlattenedSchedule = Omit<
-  InstanceSchedule,
-  'parameters' | 'retention'
-> & {
+export type FlattenedSchedule = Omit<InstanceSchedule, 'parameters'> & {
   parameters?: Record<string, unknown>;
-  // Form/UI keeps the copies field mapped to/from schedule.retention at the
-  // Instance API boundary (count-only for now)
-  retentionCopies?: number;
   storageName: string;
 };
 

@@ -157,7 +157,9 @@ const ScheduledBackupsList = () => {
             </Box>
             <Box sx={{ width: '30%' }}>
               <Typography variant="body2">
-                {`Retention copies: ${item.retentionCopies || 'infinite'}`}
+                {item.retention?.type === 'time'
+                  ? `Retention: ${item.retention.duration}`
+                  : `Retention copies: ${item.retention?.count ?? 'infinite'}`}
               </Typography>
             </Box>
             <Box sx={{ width: '15%' }}>
