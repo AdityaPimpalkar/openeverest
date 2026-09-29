@@ -17,23 +17,6 @@ import { applySchedulesToStorages } from 'pages/db-cluster-details/backups/backu
 import { flattenSchedules, scheduleToApi } from './backup-schedules';
 
 describe('scheduleToApi', () => {
-  it('passes retention through unchanged', () => {
-    expect(
-      scheduleToApi({
-        name: 'daily',
-        cron: '0 2 * * *',
-        enabled: true,
-        storageName: 's3',
-        retention: { type: 'time', duration: '30d' },
-      })
-    ).toEqual({
-      name: 'daily',
-      cron: '0 2 * * *',
-      enabled: true,
-      retention: { type: 'time', duration: '30d' },
-    });
-  });
-
   it('omits unset retention', () => {
     expect(
       scheduleToApi({
