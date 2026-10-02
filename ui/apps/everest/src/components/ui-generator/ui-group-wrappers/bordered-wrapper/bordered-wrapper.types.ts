@@ -12,6 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { ReactNode, Ref } from 'react';
 import { GroupWrapperProps } from 'components/ui-generator/ui-generator.types';
 
-export type StackWrapperProps = Pick<GroupWrapperProps, 'children'>;
+export type BorderedWrapperProps = Pick<
+  GroupWrapperProps,
+  'children' | 'label' | 'description'
+> & {
+  // Control shown at the heading's end (e.g. a toggleable group's switch).
+  action?: ReactNode;
+  bodyRef?: Ref<HTMLDivElement>;
+};

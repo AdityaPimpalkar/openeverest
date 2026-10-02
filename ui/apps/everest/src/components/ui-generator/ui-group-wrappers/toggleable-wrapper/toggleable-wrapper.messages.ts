@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { GroupWrapperProps } from 'components/ui-generator/ui-generator.types';
-
-export type StackWrapperProps = Pick<GroupWrapperProps, 'children'>;
+export const Messages = {
+  switchLabel: 'Enable',
+  switchAriaLabel: (label?: string) =>
+    label ? `Enable ${label}` : 'Enable section',
+};

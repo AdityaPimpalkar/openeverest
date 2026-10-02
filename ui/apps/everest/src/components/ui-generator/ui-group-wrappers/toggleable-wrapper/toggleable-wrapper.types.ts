@@ -14,4 +14,7 @@
 
 import { GroupWrapperProps } from 'components/ui-generator/ui-generator.types';
 
-export type StackWrapperProps = Pick<GroupWrapperProps, 'children'>;
+export type ToggleableWrapperProps = Pick<
+  GroupWrapperProps,
+  'children' | 'label' | 'description' | 'toggleable'
+>;
