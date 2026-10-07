@@ -13,26 +13,27 @@
 // limitations under the License.
 
 import { Alert, AlertTitle, Box } from '@mui/material';
-import type {
-  InstanceCondition,
-  PodsAlertReason,
-} from 'shared-types/instance.types';
+import { CodeCopyBlock } from '@percona/ui-lib';
+import type { PodsAlertCondition } from 'shared-types/instance.types';
 import { Messages } from './pods-alert.messages';
 
 interface PodsAlertProps {
-  condition: InstanceCondition;
+  condition: PodsAlertCondition;
 }
 
 export const PodsAlert = ({ condition }: PodsAlertProps) => {
-  const { title, hint } = Messages.alerts[condition.reason as PodsAlertReason];
+  const { title, hint } = Messages.alerts[condition.reason];
 
   return (
-    <Alert severity="warning" sx={{ my: 1 }} data-testid="pods-alert">
+    <Alert
+      severity="warning"
+      sx={{ mt: 1, mb: 2, '& > .MuiAlert-message': { width: '100%' } }}
+      data-testid="pods-alert"
+    >
       <AlertTitle>{title}</AlertTitle>
       {hint}
-      <Box sx={{ mt: 1, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
-        <strong>{Messages.reasonLabel}</strong> <span>{condition.message}</span>
-      </Box>
+      <Box sx={{ mt: 1, fontWeight: 600 }}>{Messages.reasonLabel}</Box>
+      <CodeCopyBlock message={condition.message} severity="warning" />
     </Alert>
   );
 };
