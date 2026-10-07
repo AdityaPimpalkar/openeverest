@@ -16,6 +16,7 @@
 package instance
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -127,6 +128,28 @@ func TestInstanceStatus_HappyPath(t *testing.T) {
 		Cluster:   "main",
 	}, cfgPath)
 	require.NoError(t, err)
+}
+
+func TestPrintConditionTable_MultiLineMessage(t *testing.T) {
+	t.Parallel()
+
+	status := `{"status":{"conditions":[
+		{"type":"Ready","status":"True","reason":"Ready","message":"","lastTransitionTime":"2026-10-02T12:00:00Z"},
+		{"type":"PodsScheduled","status":"False","reason":"Unschedulable","lastTransitionTime":"2026-10-02T12:00:00Z",
+		 "message":"configServer: 2 of 3 pods cannot be scheduled\nengine: 1 of 5 pods cannot be scheduled"}
+	]}}`
+	var inst client.Instance
+	require.NoError(t, json.Unmarshal([]byte(status), &inst))
+	var out bytes.Buffer
+
+	printConditionTable(&out, &inst)
+
+	want := "\nConditions:\n" +
+		"  TYPE           STATUS  REASON         MESSAGE\n" +
+		"  Ready          True    Ready          -\n" +
+		"  PodsScheduled  False   Unschedulable  configServer: 2 of 3 pods cannot be scheduled\n" +
+		"                                        engine: 1 of 5 pods cannot be scheduled\n"
+	assert.Equal(t, want, out.String())
 }
 
 func TestInstanceStatus_NotFound(t *testing.T) {

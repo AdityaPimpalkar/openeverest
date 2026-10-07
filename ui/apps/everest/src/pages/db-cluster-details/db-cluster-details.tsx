@@ -35,9 +35,11 @@ import { beautifyDbInstanceStatus } from 'pages/databases/DbClusterView.utils';
 import {
   DB_INSTANCE_UNKNOWN_PHASE,
   DbInstancePhase,
+  getPodsAlertConditions,
 } from 'shared-types/instance.types';
 import { usePlugins } from 'contexts/plugins';
 import type { ClusterDetailTabExtension } from '@openeverest/plugin-sdk';
+import { PodsAlert } from './pods-alert';
 
 const WithPermissionDetails = ({
   instanceName,
@@ -51,6 +53,7 @@ const WithPermissionDetails = ({
   const status =
     (instance?.status?.phase as DbInstancePhase | undefined) ??
     DB_INSTANCE_UNKNOWN_PHASE;
+  const podsAlerts = getPodsAlertConditions(instance);
 
   // TODO RBAC
   // useRBACPermissionRoute([
@@ -166,6 +169,9 @@ const WithPermissionDetails = ({
             {Messages.restoringDb}
           </Alert>
         )} */}
+        {podsAlerts.map((condition) => (
+          <PodsAlert key={condition.type} condition={condition} />
+        ))}
         <Outlet />
       </Box>
     </>

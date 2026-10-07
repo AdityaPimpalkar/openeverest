@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { PhaseType } from 'shared-types/api.types';
+import { Instance, PhaseType } from 'shared-types/api.types';
 
 export const DB_INSTANCE_UNKNOWN_PHASE = 'Unknown' as const;
 export type DbInstancePhase =
@@ -42,3 +42,34 @@ export const DbInstancePhaseValues: readonly DbInstancePhase[] = [
   ...Object.values(DbInstancePhaseStatus),
   DB_INSTANCE_UNKNOWN_PHASE,
 ];
+
+export type InstanceCondition = NonNullable<
+  NonNullable<Instance['status']>['conditions']
+>[number];
+
+// Mirrors v1alpha1.ConditionPodsScheduled and ConditionPodsReady; condition types aren't in the generated contract.
+export const INSTANCE_CONDITION_PODS_SCHEDULED = 'PodsScheduled';
+export const INSTANCE_CONDITION_PODS_READY = 'PodsReady';
+
+// NotReady is left out: pods are not ready while they start.
+export const PODS_ALERT_REASONS = [
+  'Unschedulable',
+  'CrashLoopBackOff',
+  'ImagePullBackOff',
+  'CreateContainerConfigError',
+] as const;
+export type PodsAlertReason = (typeof PODS_ALERT_REASONS)[number];
+
+const isPodsAlertReason = (reason: string): reason is PodsAlertReason =>
+  (PODS_ALERT_REASONS as readonly string[]).includes(reason);
+
+export const getPodsAlertConditions = (
+  instance?: Instance
+): InstanceCondition[] =>
+  (instance?.status?.conditions ?? []).filter(
+    (c) =>
+      (c.type === INSTANCE_CONDITION_PODS_SCHEDULED ||
+        c.type === INSTANCE_CONDITION_PODS_READY) &&
+      c.status === 'False' &&
+      isPodsAlertReason(c.reason)
+  );

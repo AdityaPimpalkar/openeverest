@@ -87,4 +87,101 @@ describe('DbClusterDetails', () => {
 
     expect(screen.getByText('Unknown')).toBeInTheDocument();
   });
+
+  it('warns about pods the scheduler cannot place, quoting the reason', () => {
+    const message =
+      "engine: 1 of 3 pods cannot be scheduled: 0/2 nodes are available: 2 node(s) didn't match pod anti-affinity rules.";
+    renderDetails({
+      instance: {
+        ...mockInstance,
+        status: {
+          phase: 'Initializing',
+          conditions: [
+            {
+              type: 'PodsScheduled',
+              status: 'False',
+              reason: 'Unschedulable',
+              message,
+              lastTransitionTime: '2026-10-02T12:00:00Z',
+            },
+          ],
+        },
+      },
+    });
+
+    expect(
+      screen.getByText('Some pods cannot be scheduled')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Reason:')).toBeInTheDocument();
+    expect(screen.getByText(message)).toBeInTheDocument();
+  });
+
+  it('shows no scheduling warning once every pod has a node', () => {
+    renderDetails({
+      instance: {
+        ...mockInstance,
+        status: {
+          phase: 'Ready',
+          conditions: [
+            {
+              type: 'PodsScheduled',
+              status: 'True',
+              reason: 'Scheduled',
+              message: '',
+              lastTransitionTime: '2026-10-02T12:00:00Z',
+            },
+          ],
+        },
+      },
+    });
+
+    expect(screen.queryByTestId('pods-alert')).not.toBeInTheDocument();
+  });
+
+  it('warns about crashing pods, quoting the reason', () => {
+    const message =
+      'engine: 1 of 3 pods keep crashing: container mongod last exited with OOMKilled (exit code 137)';
+    renderDetails({
+      instance: {
+        ...mockInstance,
+        status: {
+          phase: 'Initializing',
+          conditions: [
+            {
+              type: 'PodsReady',
+              status: 'False',
+              reason: 'CrashLoopBackOff',
+              message,
+              lastTransitionTime: '2026-10-02T12:00:00Z',
+            },
+          ],
+        },
+      },
+    });
+
+    expect(screen.getByText('Some pods keep crashing')).toBeInTheDocument();
+    expect(screen.getByText(message)).toBeInTheDocument();
+  });
+
+  it('does not warn about pods that are only starting', () => {
+    renderDetails({
+      instance: {
+        ...mockInstance,
+        status: {
+          phase: 'Initializing',
+          conditions: [
+            {
+              type: 'PodsReady',
+              status: 'False',
+              reason: 'NotReady',
+              message: 'engine: 1 of 3 pods are not ready',
+              lastTransitionTime: '2026-10-02T12:00:00Z',
+            },
+          ],
+        },
+      },
+    });
+
+    expect(screen.queryByTestId('pods-alert')).not.toBeInTheDocument();
+  });
 });
