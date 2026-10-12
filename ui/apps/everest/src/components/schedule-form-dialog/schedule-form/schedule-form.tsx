@@ -26,7 +26,7 @@ import { BackupConfigFields } from 'components/backup-config-fields';
 import { FormMode } from 'components/ui-generator/ui-generator.types';
 import { Messages, retentionTypeOptions } from './schedule-form.messages';
 import { ScheduleFormFields, ScheduleFormProps } from './schedule-form.types';
-import { Alert, Box, MenuItem } from '@mui/material';
+import { Alert, Box, MenuItem, Typography } from '@mui/material';
 import { useFormContext } from 'react-hook-form';
 import { useContext, useMemo } from 'react';
 import { ScheduleFormDialogContext } from '../schedule-form-dialog-context/schedule-form-dialog.context';
@@ -156,18 +156,24 @@ export const ScheduleForm = ({
             alignItems: 'flex-start',
           }}
         >
-          <TextInput
-            name={ScheduleFormFields.retentionDurationValue}
-            textFieldProps={{
-              type: 'number',
-              label: Messages.retentionDuration.label,
-              helperText: Messages.retentionDuration.helperText,
-            }}
-            isRequired
-          />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <TextInput
+              name={ScheduleFormFields.retentionDurationValue}
+              textFieldProps={{
+                type: 'number',
+                label: Messages.retentionDuration.label,
+                helperText: Messages.retentionDuration.helperText,
+                sx: { width: '100%' },
+              }}
+              isRequired
+            />
+          </Box>
           <SelectInput
             name={ScheduleFormFields.retentionDurationUnit}
             label={Messages.retentionDuration.unitLabel}
+            formControlProps={{
+              sx: { mt: 3, width: 140, flexShrink: 0 },
+            }}
             selectFieldProps={{
               label: Messages.retentionDuration.unitLabel,
             }}
@@ -179,6 +185,11 @@ export const ScheduleForm = ({
             ))}
           </SelectInput>
         </Box>
+      )}
+      {retentionType === RetentionType.keepAll && (
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+          {Messages.retentionType.keepAllHelper}
+        </Typography>
       )}
       <LabeledContent label={Messages.repeats}>
         <TimeSelection showInfoAlert errorInfoAlert={errorInfoAlert} />

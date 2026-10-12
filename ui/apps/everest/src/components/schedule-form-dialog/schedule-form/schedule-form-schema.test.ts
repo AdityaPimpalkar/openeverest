@@ -22,6 +22,7 @@ import {
   WeekDays,
 } from '../../time-selection/time-selection.types';
 import {
+  MAX_RETENTION_AMOUNT,
   RetentionDurationUnit,
   RetentionType,
 } from './schedule-form.constants';
@@ -186,6 +187,58 @@ describe('schedule-form-schema', () => {
         const messages = result.error.issues.map((i) => i.message);
         expect(messages).toContain(Messages.retentionDuration.invalidNumber);
       }
+    });
+
+    it.each(['030', '30.5', '1e3'])(
+      'rejects CRD-invalid amount %s for count retention',
+      (retentionCopies) => {
+        const s = schema([], WizardMode.New);
+        const result = s.safeParse({
+          ...validFormData,
+          retentionType: RetentionType.count,
+          retentionCopies,
+        });
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          const messages = result.error.issues.map((i) => i.message);
+          expect(messages).toContain(Messages.retentionCopies.invalidNumber);
+        }
+      }
+    );
+
+    it.each(['030', '30.5', '1e3'])(
+      'rejects CRD-invalid amount %s for time retention',
+      (retentionDurationValue) => {
+        const s = schema([], WizardMode.New);
+        const result = s.safeParse({
+          ...validFormData,
+          retentionType: RetentionType.time,
+          retentionDurationValue,
+        });
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          const messages = result.error.issues.map((i) => i.message);
+          expect(messages).toContain(Messages.retentionDuration.invalidNumber);
+        }
+      }
+    );
+
+    it('rejects retention amount above 2^31 - 1', () => {
+      const s = schema([], WizardMode.New);
+      const overflow = String(MAX_RETENTION_AMOUNT + 1);
+      const countResult = s.safeParse({
+        ...validFormData,
+        retentionType: RetentionType.count,
+        retentionCopies: overflow,
+      });
+      expect(countResult.success).toBe(false);
+
+      const timeResult = s.safeParse({
+        ...validFormData,
+        retentionType: RetentionType.time,
+        retentionDurationValue: overflow,
+      });
+      expect(timeResult.success).toBe(false);
     });
   });
 

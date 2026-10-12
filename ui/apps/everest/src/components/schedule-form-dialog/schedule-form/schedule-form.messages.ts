@@ -33,18 +33,20 @@ export const Messages = {
   },
   retentionType: {
     label: 'Retention',
-    count: 'Count',
-    time: 'Time',
+    count: 'Keep last N backups',
+    time: 'Keep for a period',
     keepAll: 'Keep all',
+    keepAllHelper: 'Backups are never deleted automatically',
   },
   retentionCopies: {
-    label: 'Retention copies',
+    label: 'Number of backups',
     helperText: 'Number of recent backups to keep',
     invalidNumber: 'Enter a whole number of at least 1',
   },
   retentionDuration: {
     label: 'Keep for',
-    helperText: 'Recovery window for time-based retention',
+    helperText:
+      'Backups needed to restore to any point in this period are kept',
     invalidNumber: 'Enter a whole number of at least 1',
     unitLabel: 'Unit',
     unit: {

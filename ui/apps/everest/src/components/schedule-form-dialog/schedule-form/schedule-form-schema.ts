@@ -25,6 +25,8 @@ import { getCronExpressionFromFormValues } from '../../time-selection/time-selec
 import { sameScheduleFunc } from '../schedule-form-dialog.utils';
 import { WizardMode } from 'shared-types/wizard.types.ts';
 import {
+  MAX_RETENTION_AMOUNT,
+  RETENTION_AMOUNT_PATTERN,
   RetentionDurationUnit,
   RetentionType,
 } from './schedule-form.constants';
@@ -64,10 +66,8 @@ export const storageLocationScheduleFormSchema = (
   };
 };
 
-const isValidRetentionAmount = (value: string) => {
-  const parsed = parseInt(value, 10);
-  return !isNaN(parsed) && parsed >= 1 && parsed <= Math.pow(2, 31) - 1;
-};
+const isValidRetentionAmount = (value: string) =>
+  RETENTION_AMOUNT_PATTERN.test(value) && Number(value) <= MAX_RETENTION_AMOUNT;
 
 export const schema = (schedules: FlattenedSchedule[], mode: WizardMode) => {
   const schedulesNamesList = schedules.map((item) => item?.name);
@@ -89,18 +89,12 @@ export const schema = (schedules: FlattenedSchedule[], mode: WizardMode) => {
             });
           }
         }),
-      [ScheduleFormFields.retentionType]: z.enum([
-        RetentionType.count,
-        RetentionType.time,
-        RetentionType.keepAll,
-      ]),
+      [ScheduleFormFields.retentionType]: z.nativeEnum(RetentionType),
       [ScheduleFormFields.retentionCopies]: z.string(),
       [ScheduleFormFields.retentionDurationValue]: z.string(),
-      [ScheduleFormFields.retentionDurationUnit]: z.enum([
-        RetentionDurationUnit.days,
-        RetentionDurationUnit.weeks,
-        RetentionDurationUnit.months,
-      ]),
+      [ScheduleFormFields.retentionDurationUnit]: z.nativeEnum(
+        RetentionDurationUnit
+      ),
       [ScheduleFormFields.backupClassName]: z
         .string()
         .min(1, Messages.backupClass.required),

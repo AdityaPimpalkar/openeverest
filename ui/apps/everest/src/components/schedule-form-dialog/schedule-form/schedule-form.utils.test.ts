@@ -28,10 +28,14 @@ import {
   WeekDays,
 } from '../../time-selection/time-selection.types';
 import {
+  DEFAULT_RETENTION_COPIES,
+  DEFAULT_RETENTION_DURATION_UNIT,
+  DEFAULT_RETENTION_DURATION_VALUE,
   RetentionDurationUnit,
   RetentionType,
 } from './schedule-form.constants';
 import { ScheduleFormFields } from './schedule-form.types';
+import type { ScheduleRetention } from 'shared-types/backups.types';
 
 const makeSchedule = (
   overrides: Partial<FlattenedSchedule> = {}
@@ -87,65 +91,46 @@ describe('parseRetentionDuration', () => {
   });
 });
 
-describe('retentionFieldsFromApi', () => {
-  it('maps count retention', () => {
+describe('retentionFieldsFromApi / retentionToApi', () => {
+  const roundTripCases = [
+    { type: 'count', count: 7 },
+    { type: 'time', duration: '4w' },
+    undefined,
+  ] satisfies (ScheduleRetention | undefined)[];
+
+  it.each(roundTripCases)('round-trips %o', (retention) => {
+    expect(retentionToApi(retentionFieldsFromApi(retention))).toEqual(
+      retention
+    );
+  });
+
+  it('fills inactive-type defaults when mapping from API', () => {
     expect(retentionFieldsFromApi({ type: 'count', count: 7 })).toEqual({
       [ScheduleFormFields.retentionType]: RetentionType.count,
       [ScheduleFormFields.retentionCopies]: '7',
-      [ScheduleFormFields.retentionDurationValue]: '30',
-      [ScheduleFormFields.retentionDurationUnit]: RetentionDurationUnit.days,
+      [ScheduleFormFields.retentionDurationValue]:
+        DEFAULT_RETENTION_DURATION_VALUE,
+      [ScheduleFormFields.retentionDurationUnit]:
+        DEFAULT_RETENTION_DURATION_UNIT,
     });
-  });
 
-  it('maps time retention', () => {
     expect(
       retentionFieldsFromApi({ type: 'time', duration: '4w' })
     ).toEqual({
       [ScheduleFormFields.retentionType]: RetentionType.time,
-      [ScheduleFormFields.retentionCopies]: '1',
+      [ScheduleFormFields.retentionCopies]: DEFAULT_RETENTION_COPIES,
       [ScheduleFormFields.retentionDurationValue]: '4',
       [ScheduleFormFields.retentionDurationUnit]: RetentionDurationUnit.weeks,
     });
-  });
 
-  it('maps unset retention to keep-all', () => {
     expect(retentionFieldsFromApi(undefined)).toEqual({
       [ScheduleFormFields.retentionType]: RetentionType.keepAll,
-      [ScheduleFormFields.retentionCopies]: '1',
-      [ScheduleFormFields.retentionDurationValue]: '30',
-      [ScheduleFormFields.retentionDurationUnit]: RetentionDurationUnit.days,
+      [ScheduleFormFields.retentionCopies]: DEFAULT_RETENTION_COPIES,
+      [ScheduleFormFields.retentionDurationValue]:
+        DEFAULT_RETENTION_DURATION_VALUE,
+      [ScheduleFormFields.retentionDurationUnit]:
+        DEFAULT_RETENTION_DURATION_UNIT,
     });
-  });
-});
-
-describe('retentionToApi', () => {
-  it('maps count retention', () => {
-    expect(
-      retentionToApi(
-        makeFormData({
-          retentionType: RetentionType.count,
-          retentionCopies: '5',
-        })
-      )
-    ).toEqual({ type: 'count', count: 5 });
-  });
-
-  it('maps time retention', () => {
-    expect(
-      retentionToApi(
-        makeFormData({
-          retentionType: RetentionType.time,
-          retentionDurationValue: '2',
-          retentionDurationUnit: RetentionDurationUnit.months,
-        })
-      )
-    ).toEqual({ type: 'time', duration: '2m' });
-  });
-
-  it('omits retention for keep-all', () => {
-    expect(
-      retentionToApi(makeFormData({ retentionType: RetentionType.keepAll }))
-    ).toBeUndefined();
   });
 });
 

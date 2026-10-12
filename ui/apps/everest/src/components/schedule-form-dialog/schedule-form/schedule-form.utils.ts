@@ -21,6 +21,7 @@ import { ScheduleWizardMode, WizardMode } from 'shared-types/wizard.types';
 import { removeEmptyFieldValues } from 'components/ui-generator/utils/postprocess/postprocess-schema';
 import { ScheduleRetention } from 'shared-types/backups.types';
 import {
+  DEFAULT_RETENTION_COPIES,
   DEFAULT_RETENTION_DURATION_UNIT,
   DEFAULT_RETENTION_DURATION_VALUE,
   RETENTION_DURATION_PATTERN,
@@ -30,21 +31,28 @@ import {
 import { ScheduleFormFields } from './schedule-form.types';
 
 /** Known static field keys in ScheduleFormData (everything else is dynamic config). */
-const STATIC_KEYS = new Set([
-  'scheduleName',
-  'backupClassName',
-  'storageLocation',
-  'retentionType',
-  'retentionCopies',
-  'retentionDurationValue',
-  'retentionDurationUnit',
-  'selectedTime',
-  'minute',
-  'hour',
-  'amPm',
-  'onDay',
-  'weekDay',
+const STATIC_KEYS = new Set<string>([
+  ScheduleFormFields.scheduleName,
+  ScheduleFormFields.backupClassName,
+  ScheduleFormFields.storageLocation,
+  ScheduleFormFields.retentionType,
+  ScheduleFormFields.retentionCopies,
+  ScheduleFormFields.retentionDurationValue,
+  ScheduleFormFields.retentionDurationUnit,
+  ScheduleFormFields.selectedTime,
+  ScheduleFormFields.minute,
+  ScheduleFormFields.hour,
+  ScheduleFormFields.amPm,
+  ScheduleFormFields.onDay,
+  ScheduleFormFields.weekDay,
 ]);
+
+const retentionFieldDefaults = {
+  [ScheduleFormFields.retentionCopies]: DEFAULT_RETENTION_COPIES,
+  [ScheduleFormFields.retentionDurationValue]:
+    DEFAULT_RETENTION_DURATION_VALUE,
+  [ScheduleFormFields.retentionDurationUnit]: DEFAULT_RETENTION_DURATION_UNIT,
+};
 
 type UpdateScheduleArrayProps = {
   formData: ScheduleFormData;
@@ -65,41 +73,43 @@ export const parseRetentionDuration = (
       unit: DEFAULT_RETENTION_DURATION_UNIT,
     };
   }
+
+  const unit = Object.values(RetentionDurationUnit).find((u) => u === match[2]);
+  if (!unit) {
+    return {
+      value: DEFAULT_RETENTION_DURATION_VALUE,
+      unit: DEFAULT_RETENTION_DURATION_UNIT,
+    };
+  }
+
   return {
     value: match[1],
-    unit: match[2] as RetentionDurationUnit,
+    unit,
   };
 };
 
 export const retentionFieldsFromApi = (
   retention: ScheduleRetention | undefined
 ) => {
-  if (retention?.type === 'count' && retention.count != null) {
+  if (retention?.type === RetentionType.count && retention.count != null) {
     return {
+      ...retentionFieldDefaults,
       [ScheduleFormFields.retentionType]: RetentionType.count,
       [ScheduleFormFields.retentionCopies]: String(retention.count),
-      [ScheduleFormFields.retentionDurationValue]:
-        DEFAULT_RETENTION_DURATION_VALUE,
-      [ScheduleFormFields.retentionDurationUnit]:
-        DEFAULT_RETENTION_DURATION_UNIT,
     };
   }
-  if (retention?.type === 'time' && retention.duration) {
+  if (retention?.type === RetentionType.time && retention.duration) {
     const { value, unit } = parseRetentionDuration(retention.duration);
     return {
+      ...retentionFieldDefaults,
       [ScheduleFormFields.retentionType]: RetentionType.time,
-      [ScheduleFormFields.retentionCopies]: '1',
       [ScheduleFormFields.retentionDurationValue]: value,
       [ScheduleFormFields.retentionDurationUnit]: unit,
     };
   }
   return {
+    ...retentionFieldDefaults,
     [ScheduleFormFields.retentionType]: RetentionType.keepAll,
-    [ScheduleFormFields.retentionCopies]: '1',
-    [ScheduleFormFields.retentionDurationValue]:
-      DEFAULT_RETENTION_DURATION_VALUE,
-    [ScheduleFormFields.retentionDurationUnit]:
-      DEFAULT_RETENTION_DURATION_UNIT,
   };
 };
 
@@ -121,13 +131,13 @@ export const retentionToApi = (
 
   if (retentionType === RetentionType.count) {
     return {
-      type: 'count',
+      type: RetentionType.count,
       count: parseInt(retentionCopies, 10),
     };
   }
   if (retentionType === RetentionType.time) {
     return {
-      type: 'time',
+      type: RetentionType.time,
       duration: `${retentionDurationValue}${retentionDurationUnit}`,
     };
   }
