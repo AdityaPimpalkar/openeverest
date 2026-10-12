@@ -24,8 +24,7 @@ export const RetentionType = {
   keepAll: 'keep-all',
 } as const;
 
-export type RetentionType =
-  (typeof RetentionType)[keyof typeof RetentionType];
+export type RetentionType = (typeof RetentionType)[keyof typeof RetentionType];
 
 export const RetentionDurationUnit = {
   days: 'd',

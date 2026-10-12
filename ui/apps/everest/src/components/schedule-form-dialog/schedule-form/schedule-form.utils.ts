@@ -49,8 +49,7 @@ const STATIC_KEYS = new Set<string>([
 
 const retentionFieldDefaults = {
   [ScheduleFormFields.retentionCopies]: DEFAULT_RETENTION_COPIES,
-  [ScheduleFormFields.retentionDurationValue]:
-    DEFAULT_RETENTION_DURATION_VALUE,
+  [ScheduleFormFields.retentionDurationValue]: DEFAULT_RETENTION_DURATION_VALUE,
   [ScheduleFormFields.retentionDurationUnit]: DEFAULT_RETENTION_DURATION_UNIT,
 };
 

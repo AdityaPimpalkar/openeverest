@@ -114,9 +114,7 @@ describe('retentionFieldsFromApi / retentionToApi', () => {
         DEFAULT_RETENTION_DURATION_UNIT,
     });
 
-    expect(
-      retentionFieldsFromApi({ type: 'time', duration: '4w' })
-    ).toEqual({
+    expect(retentionFieldsFromApi({ type: 'time', duration: '4w' })).toEqual({
       [ScheduleFormFields.retentionType]: RetentionType.time,
       [ScheduleFormFields.retentionCopies]: DEFAULT_RETENTION_COPIES,
       [ScheduleFormFields.retentionDurationValue]: '4',
