@@ -40,7 +40,7 @@ export const Messages = {
   },
   retentionCopies: {
     label: 'Number of backups',
-    helperText: 'Number of recent backups to keep',
+    helperText: 'Older backups are deleted automatically',
     invalidNumber: 'Enter a whole number of at least 1',
   },
   retentionDuration: {
