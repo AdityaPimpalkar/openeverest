@@ -66,15 +66,10 @@ export const parseRetentionDuration = (
   unit: RetentionDurationUnit;
 } => {
   const match = duration.match(RETENTION_DURATION_PATTERN);
-  if (!match) {
-    return {
-      value: DEFAULT_RETENTION_DURATION_VALUE,
-      unit: DEFAULT_RETENTION_DURATION_UNIT,
-    };
-  }
-
-  const unit = Object.values(RetentionDurationUnit).find((u) => u === match[2]);
-  if (!unit) {
+  const unit = Object.values(RetentionDurationUnit).find(
+    (u) => u === match?.[2]
+  );
+  if (!match || !unit) {
     return {
       value: DEFAULT_RETENTION_DURATION_VALUE,
       unit: DEFAULT_RETENTION_DURATION_UNIT,
