@@ -112,7 +112,6 @@ const ConnectionSection = ({
             ConnectionSectionMessages.waitingForInstance
           }
         />
-
       )}
     </OverviewSection>
   );
