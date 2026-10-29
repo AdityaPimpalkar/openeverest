@@ -122,6 +122,12 @@ type InstanceSpec struct {
 	// would have no effect.
 	// +optional
 	UserSecretRef *common.SecretRef `json:"userSecretRef,omitempty"`
+
+	// Monitoring configures where this Instance sends monitoring data. Core
+	// creates one MonitoringBinding per destination; the resolved state is
+	// mirrored in status.monitoring.destinations[].
+	// +optional
+	Monitoring *InstanceMonitoringSpec `json:"monitoring,omitempty"`
 }
 
 // InstanceDeletionPolicy controls what happens to Backup and Restore CRs
@@ -511,6 +517,12 @@ func (sr *SourceRanges) NormalizedSourceRanges() SourceRanges {
 
 // InstanceStatus defines the observed state of Instance.
 type InstanceStatus struct {
+	// ObservedGeneration is the metadata.generation the provider-runtime last
+	// reconciled. Status describes an older spec while it is lower than
+	// metadata.generation.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
 	// Phase of the database cluster.
 	Phase InstancePhase `json:"phase,omitempty"`
 
@@ -562,6 +574,11 @@ type InstanceStatus struct {
 	// never go stale: an action the provider stops requesting disappears.
 	// +optional
 	PendingMaintenance []PendingMaintenanceAction `json:"pendingMaintenance,omitempty"`
+	// Monitoring is what the Instance exposes to monitoring (sources) and
+	// one read-only summary per spec.monitoring.destinations[] entry.
+	// Written only by provider-runtime.
+	// +optional
+	Monitoring *InstanceMonitoringStatus `json:"monitoring,omitempty"`
 	// +listType=map
 	// +listMapKey=type
 	// +optional
@@ -713,6 +730,14 @@ const (
 
 // Condition types for Instance.
 const (
+	// ConditionReady summarises the Instance for kubectl wait, Argo CD and
+	// Flux. It is False with reason ProviderNotFound, UserSecretNotFound or
+	// ValidationFailed while one of them blocks the Instance, whatever the
+	// phase. Otherwise it is True when the phase is Ready and neither
+	// BackupConfigured nor DataSourceReady is False; else it is False with the
+	// reason and message of the False condition, or with the phase as reason.
+	ConditionReady = "Ready"
+
 	// ConditionConnectionDetailsReady indicates whether the connection
 	// details Secret has been populated by the provider.
 	ConditionConnectionDetailsReady = "ConnectionDetailsReady"
@@ -735,6 +760,13 @@ const (
 	// the reason and message explain the configuration failure (e.g., storage
 	// resolution or PITR wiring error).
 	ConditionBackupConfigured = "BackupConfigured"
+
+	// ConditionMonitoringConfigured aggregates status.monitoring.destinations[]:
+	// False if any entry is not Accepted or Configured=False, else Unknown if
+	// any entry is Unknown or has no binding yet, else True. Its message lists
+	// "entry: reason" for every non-True entry. Absent when spec.monitoring
+	// has no destinations.
+	ConditionMonitoringConfigured = "MonitoringConfigured"
 
 	// ConditionDataSourceReady indicates the outcome of seeding an Instance
 	// from .spec.dataSource. The condition is set only when the Instance has
@@ -771,6 +803,22 @@ const (
 	// CreateContainerConfigError, then NotReady. The message has one line per
 	// affected component. Only set when the provider labels its pods.
 	ConditionPodsReady = "PodsReady"
+)
+
+// Reasons for the Ready condition. Ready=True uses ReasonReady.
+const (
+	// ReasonProviderNotFound indicates the Provider named by
+	// spec.providerRef does not exist. The provider is not called.
+	ReasonProviderNotFound = "ProviderNotFound"
+
+	// ReasonUserSecretNotFound indicates the Secret named by
+	// spec.userSecretRef does not exist. The provider is not called, so a new
+	// Instance waits instead of being seeded with generated credentials.
+	ReasonUserSecretNotFound = "UserSecretNotFound"
+
+	// ReasonValidationFailed indicates the provider rejected the spec. The
+	// message carries the provider's error.
+	ReasonValidationFailed = "ValidationFailed"
 )
 
 // Reasons for the PodsScheduled condition.
@@ -823,6 +871,46 @@ const (
 	ReasonRetriesExhausted = "RetriesExhausted"
 )
 
+// Reasons for the BackupConfigured condition set by the provider-runtime before
+// it calls the provider. Providers set their own reasons through
+// BackupConfigError.
+const (
+	// ReasonBackupClassNotFound indicates the BackupClass named by
+	// spec.backup.classRef does not exist.
+	ReasonBackupClassNotFound = "BackupClassNotFound"
+
+	// ReasonBackupClassIncompatible indicates the BackupClass named by
+	// spec.backup.classRef is not ProviderManaged or does not list the
+	// Instance's provider in spec.supportedProviders.
+	ReasonBackupClassIncompatible = "BackupClassIncompatible"
+
+	// ReasonBackupStorageNotFound indicates a BackupStorage named in
+	// spec.backup.storages does not exist in the Instance's namespace.
+	ReasonBackupStorageNotFound = "BackupStorageNotFound"
+
+	// ReasonBackupStorageCredentialsNotFound indicates the credentials
+	// Secret of a BackupStorage named in spec.backup.storages does not exist.
+	ReasonBackupStorageCredentialsNotFound = "BackupStorageCredentialsNotFound"
+)
+
+// Reasons for the MonitoringConfigured condition.
+const (
+	// ReasonMonitoringConfigured indicates every destination is Configured.
+	ReasonMonitoringConfigured = "MonitoringConfigured"
+
+	// ReasonMonitoringNotConfigured indicates at least one destination is
+	// not Accepted or not Configured.
+	ReasonMonitoringNotConfigured = "MonitoringNotConfigured"
+
+	// ReasonMonitoringPending indicates at least one destination has not
+	// reported yet.
+	ReasonMonitoringPending = "MonitoringPending"
+
+	// ReasonMonitoringIntegrationUnsupported indicates the provider
+	// implements no monitoring interface, so no destination can be served.
+	ReasonMonitoringIntegrationUnsupported = "MonitoringIntegrationUnsupported"
+)
+
 // Reasons for the DataSourceReady condition.
 const (
 	// ReasonDataSourceWaitingForCluster indicates the provider is waiting
@@ -868,6 +956,13 @@ const (
 	// BackupClass either does not exist, is not ProviderManaged, or does not
 	// list the target Instance's provider in SupportedProviders.
 	ReasonDataSourceClassUnsupported = "BackupClassUnsupported"
+
+	// ReasonDataSourceUserSecretMismatch indicates the restore failed terminally
+	// because the credentials in the Secret named by spec.userSecretRef differ
+	// from the users stored in the source backup data, so the engine cannot
+	// authenticate against the restored data. Like every False
+	// DataSourceReady reason, it is also propagated to Ready.
+	ReasonDataSourceUserSecretMismatch = "UserSecretMismatch"
 )
 
 // Reasons for the ComponentVersionDeprecated condition.
@@ -958,6 +1053,8 @@ type ComponentStatus struct {
 // +kubebuilder:printcolumn:name="Provider",type="string",JSONPath=".spec.providerRef.name"
 // +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".status.version"
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status"
+// +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].reason"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="Topology",type="string",JSONPath=".spec.topology.type",priority=1
 // +kubebuilder:printcolumn:name="Message",type="string",JSONPath=".status.message",priority=1

@@ -43,6 +43,7 @@ import (
 	backupv1alpha1 "github.com/openeverest/openeverest/v2/api/backup/v1alpha1"
 	commonv1alpha1 "github.com/openeverest/openeverest/v2/api/common/v1alpha1"
 	"github.com/openeverest/openeverest/v2/api/core/v1alpha1"
+	monitoringv1alpha1 "github.com/openeverest/openeverest/v2/api/monitoring/v1alpha1"
 	"github.com/openeverest/openeverest/v2/provider-runtime/controller"
 	"github.com/openeverest/openeverest/v2/provider-runtime/internal/instanceprep"
 	"github.com/openeverest/openeverest/v2/provider-runtime/server"
@@ -50,18 +51,24 @@ import (
 
 const finalizerName = "everest.percona.com/provider-finalizer"
 
+// conflictRequeue gives the cache time to catch up with the write that won
+// the optimistic lock.
+const conflictRequeue = time.Second
+
 // =============================================================================
 // PROVIDER RECONCILER - Works with both Interface and Builder providers
 // =============================================================================
 
 // ProviderReconciler reconciles Instance resources using a Provider.
 type ProviderReconciler struct {
-	provider     providerAdapter
-	manager      ctrl.Manager
-	serverConfig *server.ServerConfig
-	server       *server.Server
-	breaker      maintenanceBreaker
-	pods         atomic.Value // client.Reader, set once the pod watch runs
+	provider      providerAdapter
+	manager       ctrl.Manager
+	serverConfig  *server.ServerConfig
+	server        *server.Server
+	breaker       maintenanceBreaker
+	pods          atomic.Value // client.Reader, set once the pod watch runs
+	apiReader     client.Reader
+	kubeSystemUID atomic.Value // string, the cluster identity of monitoring sources
 	client.Client
 }
 
@@ -167,6 +174,10 @@ func newReconciler(ctx context.Context, p providerAdapter, opts ...ReconcilerOpt
 		return nil, fmt.Errorf("failed to add backup v1alpha1 scheme: %w", err)
 	}
 
+	if err := monitoringv1alpha1.AddToScheme(scheme); err != nil {
+		return nil, fmt.Errorf("failed to add monitoring v1alpha1 scheme: %w", err)
+	}
+
 	// Register provider-specific types
 	if typesFunc := p.Types(); typesFunc != nil {
 		if err := typesFunc(scheme); err != nil {
@@ -226,10 +237,19 @@ func newReconciler(ctx context.Context, p providerAdapter, opts ...ReconcilerOpt
 		}
 	}
 
+	if _, ok := p.(controller.MonitoringIntegrationsProvider); ok {
+		if err := mgr.GetFieldIndexer().IndexField(ctx, &monitoringv1alpha1.MonitoringDestination{},
+			indexDestinationCredentialsSecret, destinationCredentialsSecret,
+		); err != nil {
+			return nil, fmt.Errorf("failed to register monitoring destination credentials index: %w", err)
+		}
+	}
+
 	r := &ProviderReconciler{
 		provider:     p,
 		manager:      mgr,
 		serverConfig: options.serverConfig,
+		apiReader:    mgr.GetAPIReader(),
 		Client:       mgr.GetClient(),
 	}
 
@@ -323,7 +343,29 @@ func (r *ProviderReconciler) setup() error {
 
 	b := ctrl.NewControllerManagedBy(r.manager).
 		For(&v1alpha1.Instance{}, builder.WithPredicates(filter)).
+		Watches(&v1alpha1.Provider{},
+			handler.EnqueueRequestsFromMapFunc(r.instancesForProvider),
+			builder.WithPredicates(
+				predicate.NewPredicateFuncs(func(o client.Object) bool { return o.GetName() == r.provider.Name() }),
+				predicate.GenerationChangedPredicate{},
+			),
+		).
+		WatchesMetadata(&corev1.Secret{},
+			handler.EnqueueRequestsFromMapFunc(r.instancesForSecret),
+			builder.WithPredicates(existenceChanged()),
+		).
 		Named(r.provider.Name() + "-controller")
+
+	if r.isBackupProvider() {
+		b.Watches(&backupv1alpha1.BackupClass{},
+			handler.EnqueueRequestsFromMapFunc(r.instancesForBackupClass),
+			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
+		)
+		b.Watches(&backupv1alpha1.BackupStorage{},
+			handler.EnqueueRequestsFromMapFunc(r.instancesForBackupStorage),
+			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
+		)
+	}
 
 	// Configure watches if provider implements WatchProvider
 	if wp, ok := r.provider.(controller.WatchProvider); ok {
@@ -351,6 +393,10 @@ func (r *ProviderReconciler) setup() error {
 				b.Watches(wc.Object, h, opts...)
 			}
 		}
+	}
+
+	if monitoringEnabled(r.provider) {
+		r.watchMonitoringBindings(b)
 	}
 
 	c, err := b.Build(r)
@@ -381,8 +427,10 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req reconcile.Reques
 		return r.handleDeletion(ctx, inCtx, in, logger)
 	}
 
-	// Ensure provider label and finalizer are present
+	// Ensure provider label and finalizer are present. A merge patch, unlike
+	// Update, cannot erase spec fields this binary's types do not know.
 	var needsUpdate bool
+	base := in.DeepCopy()
 	if in.Labels == nil {
 		in.Labels = make(map[string]string)
 	}
@@ -395,20 +443,45 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req reconcile.Reques
 		needsUpdate = true
 	}
 	if needsUpdate {
-		if err := r.Client.Update(ctx, in); err != nil {
+		if err := r.Patch(ctx, in, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{})); err != nil {
+			if apierrors.IsConflict(err) {
+				return reconcile.Result{RequeueAfter: conflictRequeue}, nil
+			}
 			return reconcile.Result{}, err
 		}
 		return reconcile.Result{Requeue: true}, nil
 	}
 
+	// The provider is not called while a referent it needs is missing; the
+	// watches re-enqueue the Instance once it appears.
+	b, err := r.missingReferent(ctx, in)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if b.reason != "" {
+		logger.Info("Waiting for a referent", "reason", b.reason, "message", b.message)
+		return reconcile.Result{}, r.block(ctx, in, &b)
+	}
+
 	// Run validation
 	if err := validateVersionBundle(ctx, r.Client, in); err != nil {
 		logger.Error(err, "Version bundle validation failed")
-		in.Status.Phase = v1alpha1.InstancePhaseFailed
-		if updateErr := r.Client.Status().Update(ctx, in); updateErr != nil {
+		if updateErr := r.block(ctx, in, &blocker{reason: v1alpha1.ReasonValidationFailed, message: err.Error()}); updateErr != nil {
 			logger.Error(updateErr, "Failed to update status after validation error")
 		}
 		return reconcile.Result{}, err
+	}
+	backupMiss, err := r.missingBackupReferent(ctx, in)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if backupMiss.reason != "" {
+		logger.Info("Waiting for a backup referent", "reason", backupMiss.reason, "message", backupMiss.message)
+		setCondition(
+			in, v1alpha1.ConditionBackupConfigured, metav1.ConditionFalse,
+			backupMiss.reason, backupMiss.message, metav1.Now(),
+		)
+		return reconcile.Result{}, r.block(ctx, in, nil)
 	}
 	if err := validateInstanceBackupConfig(ctx, r.Client, in); err != nil {
 		logger.Error(err, "Backup configuration validation failed")
@@ -421,16 +494,14 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req reconcile.Reques
 		}
 		setCondition(in, v1alpha1.ConditionBackupConfigured, metav1.ConditionFalse,
 			reason, err.Error(), metav1.Now())
-		if updateErr := r.Client.Status().Update(ctx, in); updateErr != nil {
+		if updateErr := r.updateStatus(ctx, in, nil); updateErr != nil {
 			logger.Error(updateErr, "Failed to update status after backup config violation")
 		}
 		return reconcile.Result{}, nil
 	}
 	if err := r.provider.Validate(inCtx); err != nil {
 		logger.Error(err, "Validation failed")
-		// Update status to failed
-		in.Status.Phase = v1alpha1.InstancePhaseFailed
-		if updateErr := r.Client.Status().Update(ctx, in); updateErr != nil {
+		if updateErr := r.block(ctx, in, &blocker{reason: v1alpha1.ReasonValidationFailed, message: err.Error()}); updateErr != nil {
 			logger.Error(updateErr, "Failed to update status after validation error")
 		}
 		return reconcile.Result{}, err
@@ -444,6 +515,9 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req reconcile.Reques
 	}
 	syncCtx := controller.NewContext(ctx, r.Client, resolvedIn, r.provider.Name())
 	syncCtx.BlockMaintenance(r.breaker.blockedTokens(req.NamespacedName, approvedMaintenanceValue(in))...)
+	if ip, ok := r.provider.(controller.MonitoringIntegrationsProvider); ok {
+		syncCtx.SetMonitoringIntegrations(ip.MonitoringIntegrations()...)
+	}
 
 	// Passive warning for owners: flag effective component versions the
 	// installed catalog marks as deprecated, before any upgrade is attempted.
@@ -468,7 +542,7 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req reconcile.Reques
 			if syncCtx.MaintenanceRequested() {
 				flushPendingMaintenance(syncCtx, in)
 			}
-			_ = r.Client.Status().Update(ctx, in)
+			_ = r.updateStatus(ctx, in, nil)
 			return reconcile.Result{}, nil
 		}
 		// DataSourceConfigError means the engine is healthy but initial seeding
@@ -481,7 +555,7 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req reconcile.Reques
 			if syncCtx.MaintenanceRequested() {
 				flushPendingMaintenance(syncCtx, in)
 			}
-			_ = r.Client.Status().Update(ctx, in)
+			_ = r.updateStatus(ctx, in, nil)
 			return reconcile.Result{}, nil
 		}
 		logger.Error(err, "Sync failed")
@@ -556,13 +630,15 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req reconcile.Reques
 		in.Status.Version = effectiveBundleName
 	}
 
+	r.reconcileMonitoring(ctx, syncCtx, in)
+
 	// Write connection details Secret and set the ConnectionDetailsReady condition.
 	if err := r.reconcileConnectionSecret(ctx, in, status); err != nil {
 		logger.Error(err, "Failed to reconcile connection secret")
 		return reconcile.Result{}, err
 	}
 
-	if err := r.Client.Status().Update(ctx, in); err != nil {
+	if err := r.updateStatus(ctx, in, nil); err != nil {
 		logger.Error(err, "Failed to update status")
 		return reconcile.Result{}, err
 	}
@@ -653,7 +729,7 @@ func (r *ProviderReconciler) handleDeletion(
 	// Update status to deleting
 	if in.Status.Phase != v1alpha1.InstancePhaseTerminating {
 		in.Status.Phase = v1alpha1.InstancePhaseTerminating
-		if err := r.Client.Status().Update(ctx, in); err != nil {
+		if err := r.updateStatus(ctx, in, nil); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
@@ -685,8 +761,12 @@ func (r *ProviderReconciler) handleDeletion(
 	}
 
 	// Remove finalizer
+	base := in.DeepCopy()
 	controllerutil.RemoveFinalizer(in, finalizerName)
-	if err := r.Client.Update(ctx, in); err != nil {
+	if err := r.Patch(ctx, in, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{})); err != nil {
+		if apierrors.IsConflict(err) {
+			return reconcile.Result{RequeueAfter: conflictRequeue}, nil
+		}
 		return reconcile.Result{}, err
 	}
 	// Drop breaker state so a recreated Instance with the same name does not
